@@ -31,8 +31,8 @@ WORKDIR /app
 # Copy the binary from builder stage
 COPY --from=builder /app/clustereye-api .
 
-# Copy configuration files if they exist
-COPY --from=builder /app/server.yml.example ./server.yml.example 2>/dev/null || true
+# Copy configuration files
+COPY --from=builder /app/server.yml* ./
 
 # Change ownership
 RUN chown -R clustereye:clustereye /app
