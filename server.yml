@@ -1,0 +1,33 @@
+server:
+  name: ClusterEye
+grpc:
+  address: :50051
+http:
+  address: :8080
+
+log:
+  level: info          # debug, info, warn, error
+  format: json         # json, text
+  output: both         # console, file, both
+  file_path: logs/clustereye.log
+  max_size: 100        # MB
+  max_backups: 5       # backup dosya sayısı
+  max_age: 30          # gün
+  compress: true       # eski dosyaları sıkıştır
+
+database:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: Dkjf334utre1
+  dbname: clustereye
+  sslmode: disable
+
+influxdb:
+  enabled: true
+  url: "http://localhost:8086"
+  token: "u20NMomO7Sq1pU13BRT0pPT6kn9qT3D-pFp7mVgvRkDswlGicF4oK3PbbIV9W96KwIIU-xoiN2BOzPlfLs7Zjw=="
+  organization: "clustereye"
+  bucket: "clustereye"
+  batch_size: 100
+  flush_interval: "10s"

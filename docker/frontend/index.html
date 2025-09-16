@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClusterEye Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+
+        .status {
+            background: #e8f5e8;
+            color: #2d5a2d;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #4caf50;
+        }
+
+        .status-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .info-card {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .info-card h3 {
+            color: #495057;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-card p {
+            color: #212529;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .footer {
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e9ecef;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">CE</div>
+        <h1>ClusterEye</h1>
+        <p class="subtitle">Veritabanı ve Sistem İzleme Platformu</p>
+
+        <div class="status">
+            <span class="status-icon"></span>
+            <strong>Sistem Aktif</strong> - Tüm servisler çalışıyor
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>API Versiyonu</h3>
+                <p>v1.0.0</p>
+            </div>
+            <div class="info-card">
+                <h3>Aktif Portlar</h3>
+                <p>HTTP: 8080<br>gRPC: 50051</p>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <a href="/api/v1/health" class="btn btn-primary" target="_blank">API Durumu</a>
+            <a href="/api/v1/agents" class="btn btn-secondary" target="_blank">Agent Listesi</a>
+        </div>
+
+        <div class="footer">
+            <p>© 2024 ClusterEye. Tüm hakları saklıdır.</p>
+            <p>Daha fazla bilgi için <a href="https://github.com/sefaphlvn/clustereye-test" target="_blank">GitHub</a> sayfasını ziyaret edin.</p>
+        </div>
+    </div>
+
+    <script>
+        // Simple health check
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/v1/health');
+                const statusElement = document.querySelector('.status');
+
+                if (response.ok) {
+                    statusElement.innerHTML = `
+                        <span class="status-icon"></span>
+                        <strong>Sistem Aktif</strong> - Tüm servisler çalışıyor
+                    `;
+                    statusElement.style.background = '#e8f5e8';
+                    statusElement.style.color = '#2d5a2d';
+                    statusElement.style.borderColor = '#4caf50';
+                } else {
+                    throw new Error('API Hatası');
+                }
+            } catch (error) {
+                const statusElement = document.querySelector('.status');
+                statusElement.innerHTML = `
+                    <span class="status-icon" style="background: #f44336;"></span>
+                    <strong>Bağlantı Hatası</strong> - API erişilemez
+                `;
+                statusElement.style.background = '#ffeaea';
+                statusElement.style.color = '#d32f2f';
+                statusElement.style.borderColor = '#f44336';
+            }
+        }
+
+        // Check health on page load and every 30 seconds
+        checkHealth();
+        setInterval(checkHealth, 30000);
+    </script>
+</body>
+</html>

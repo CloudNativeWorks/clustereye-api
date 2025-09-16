@@ -1,0 +1,229 @@
+version: '3.8'
+
+# Production Docker Compose Configuration
+# Use this for production deployments with real domains and SSL
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: clustereye-postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-clustereye}
+      POSTGRES_USER: ${DB_USER:-clustereye_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+      - ./docker/postgres/conf:/etc/postgresql/conf.d
+      - ./backups:/backups  # Backup mount
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-clustereye_user} -d ${DB_NAME:-clustereye}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # InfluxDB for Metrics
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: clustereye-influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-clustereye}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-clustereye}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+      - ./backups:/backups  # Backup mount
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ClusterEye API Server
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: clustereye-api
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-clustereye}
+      DB_USER: ${DB_USER:-clustereye_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # InfluxDB
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG:-clustereye}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-clustereye}
+
+      # Server Config
+      HTTP_PORT: 8080
+      GRPC_PORT: 50051
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-warn}  # Production log level
+      RATE_LIMIT: ${RATE_LIMIT:-120}
+
+      # Production settings
+      GIN_MODE: release
+      GOMEMLIMIT: 512MiB
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+
+  # Nginx Reverse Proxy & Frontend (Production)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: clustereye-nginx
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/frontend:/usr/share/nginx/html:ro
+
+      # SSL certificates from Let's Encrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+      # Logs
+      - ./logs/nginx:/var/log/nginx
+
+      # DH parameters for stronger SSL
+      - ./docker/ssl/dhparam.pem:/etc/nginx/ssl/dhparam.pem:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Redis for Caching (Optional - Production enhancement)
+  redis:
+    image: redis:7-alpine
+    container_name: clustereye-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme}
+    volumes:
+      - redis_data:/data
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    profiles:
+      - production
+      - with-redis
+
+
+  # Backup Service (Automated backups)
+  backup:
+    build:
+      context: .
+      dockerfile: docker/backup/Dockerfile
+    container_name: clustereye-backup
+    environment:
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-"0 2 * * *"}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+      DB_HOST: postgres
+      DB_NAME: ${DB_NAME:-clustereye}
+      DB_USER: ${DB_USER:-clustereye_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    depends_on:
+      - postgres
+      - influxdb
+    networks:
+      - clustereye-network
+    restart: unless-stopped
+    profiles:
+      - backup
+      - production
+
+volumes:
+  postgres_data:
+    driver: local
+  influxdb_data:
+    driver: local
+  influxdb_config:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  clustereye-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

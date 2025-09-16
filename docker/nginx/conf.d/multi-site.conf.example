@@ -1,0 +1,85 @@
+# Multi-Site Configuration Example
+# Copy this file to clustereye.conf to enable multiple sites
+
+# Main ClusterEye site
+server {
+    listen 80 default_server;
+    server_name clustereye.local _;
+
+    # Health check
+    location /health {
+        access_log off;
+        return 200 "OK\n";
+        add_header Content-Type text/plain;
+    }
+
+    # API routes
+    location /api/ {
+        include /etc/nginx/conf.d/api_proxy.conf;
+    }
+
+    # ClusterEye frontend
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+# Customer Site 1
+server {
+    listen 80;
+    server_name client1.local;
+
+    location / {
+        root /usr/share/nginx/html/sites/client1;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Client1'e özel API endpoint'i
+    location /api/ {
+        proxy_set_header X-Client-ID "client1";
+        include /etc/nginx/conf.d/api_proxy.conf;
+    }
+}
+
+# Customer Site 2
+server {
+    listen 80;
+    server_name client2.local;
+
+    location / {
+        root /usr/share/nginx/html/sites/client2;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Client2'ye özel API endpoint'i
+    location /api/ {
+        proxy_set_header X-Client-ID "client2";
+        include /etc/nginx/conf.d/api_proxy.conf;
+    }
+}
+
+# Admin Panel (Alt domain)
+server {
+    listen 80;
+    server_name admin.clustereye.local;
+
+    # Basic auth for admin
+    auth_basic "Admin Area";
+    auth_basic_user_file /etc/nginx/.htpasswd;
+
+    location / {
+        root /usr/share/nginx/html/admin;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Admin API (özel rate limit)
+    location /api/ {
+        limit_req zone=api burst=50 nodelay;
+        include /etc/nginx/conf.d/api_proxy.conf;
+    }
+}

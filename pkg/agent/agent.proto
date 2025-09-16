@@ -1,0 +1,1017 @@
+syntax = "proto3";
+
+package agent;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/sefaphlvn/clustereye-test/pkg/agent";
+
+message AgentInfo {
+  string key = 1;
+  string agent_id = 2;
+  string hostname = 3;
+  string ip = 4;
+  string platform = 5;
+  bool auth = 6;
+  string test = 7;
+  string postgres_user = 8;
+  string postgres_pass = 9;
+}
+
+message PostgresInfo {
+  string cluster_name = 1;
+  string ip = 2;
+  string hostname = 3;
+  string node_status = 4;
+  string pg_version = 5;
+  string location = 6;
+  string pg_bouncer_status = 7;
+  string pg_service_status = 8;
+  int64 replication_lag_sec = 9;
+  string free_disk = 10;
+  int32 fd_percent = 11;
+  int32 total_vcpu = 13;  
+  int64 total_memory = 14;
+  string config_path = 15;
+  string data_path = 16;
+  // Patroni fields
+  bool patroni_enabled = 17;
+  string patroni_cluster = 18;
+  string patroni_role = 19;
+  string patroni_state = 20;
+  int32 patroni_rest_api = 21;
+  string patroni_detection = 22;
+}
+
+// ProcessLogUpdate, uzun süren bir işlemin (PostgreSQL promotion, failover vb.) log güncellemeleri için kullanılır
+message ProcessLogUpdate {
+  string agent_id = 1;       // Agent tanımlayıcısı
+  string process_id = 2;     // İşlem ID (UUID)
+  string process_type = 3;   // İşlem türü (postgresql_promotion, postgresql_failover, postgresql_backup vb.)
+  repeated string log_messages = 4;  // Yeni log mesajları
+  string status = 5;         // İşlem durumu (running, completed, failed)
+  float elapsed_time_s = 6;  // İşlemin başlangıcından itibaren geçen süre (saniye)
+  string updated_at = 7;     // Bu güncellemenin zaman damgası
+  map<string, string> metadata = 8;  // İşlem ile ilgili ek bilgiler
+}
+
+// ProcessLogRequest, server'a log güncellemeleri göndermek için kullanılır
+message ProcessLogRequest {
+  ProcessLogUpdate log_update = 1;
+}
+
+// ProcessLogResponse, server'dan gelen yanıt
+message ProcessLogResponse {
+  string status = 1;         // Güncelleme durumu (ok, error)
+  string message = 2;        // Varsa, hata mesajı
+}
+
+// Processor statüsünü almak için kullanılır
+message ProcessStatusRequest {
+  string agent_id = 1;
+  string process_id = 2;
+}
+
+// Processor statüsünü içeren yanıt
+message ProcessStatusResponse {
+  string process_id = 1;
+  string process_type = 2;
+  string status = 3;
+  float elapsed_time_s = 4;
+  repeated string log_messages = 5;  // Tüm log mesajları
+  string created_at = 6;
+  string updated_at = 7;
+  map<string, string> metadata = 8;
+}
+
+// MongoDB bilgileri için mesaj tanımı
+message MongoInfo {
+  string cluster_name = 1;
+  string ip = 2;
+  string hostname = 3;
+  string node_status = 4;
+  string mongo_version = 5;
+  string location = 6;
+  string mongo_status = 7;
+  string replica_set_name = 8;
+  int64 replication_lag_sec = 9;
+  string free_disk = 10;
+  int32 fd_percent = 11;
+  string port = 12;
+  int32 total_vcpu = 13;  
+  int64 total_memory = 14;
+  string config_path = 15;
+}
+
+// MongoDB log dosyalarını listelemek için istek
+message MongoLogListRequest {
+  string log_path = 1;
+}
+
+// MongoDB log dosya bilgisi
+message MongoLogFile {
+  string name = 1;
+  string path = 2;
+  int64 size = 3;
+  int64 last_modified = 4; // Unix timestamp
+}
+
+// MongoDB log dosya listesi yanıtı
+message MongoLogListResponse {
+  repeated MongoLogFile log_files = 1;
+}
+
+// MongoDB log analizi isteği
+message MongoLogAnalyzeRequest {
+  string log_file_path = 1;
+  int64 slow_query_threshold_ms = 2; // Yavaş sorgu eşiği (ms)
+  string agent_id = 3;
+}
+
+// MongoDB log mesajı
+message MongoLogEntry {
+  int64 timestamp = 1; // Unix timestamp
+  string severity = 2; // W, E, I, D
+  string component = 3;
+  string context = 4;
+  string message = 5;
+  string db_name = 6;
+  int64 duration_millis = 7;
+  string command = 8;
+  string plan_summary = 9;
+  string namespace = 10;
+}
+
+// MongoDB log analizi yanıtı
+message MongoLogAnalyzeResponse {
+  repeated MongoLogEntry log_entries = 1;
+}
+
+message AlarmCondition {
+  string metric = 1;          // "postgres_status", "memory_usage"
+  string operator = 2;        // ">", "<", "="
+  string threshold = 3;       // "90", "FAIL"
+  int32 duration_seconds = 4; // Süreklilik gerektiren koşullar için
+}
+
+message AlarmConfiguration {
+  string id = 1;
+  string name = 2;
+  string agent_id = 3;
+  string severity = 4;        // "critical", "warning", "info"
+  AlarmCondition condition = 5;
+  bool enabled = 6;
+  repeated string channels = 7; // "slack", "email"
+}
+
+message AlarmEvent {
+  string id = 1;
+  string alarm_id = 2;
+  string agent_id = 3;
+  string status = 4;          // "triggered", "resolved"
+  string metric_name = 5;
+  string metric_value = 6;
+  string message = 7;
+  string timestamp = 8;
+  string severity = 9;
+  string database = 10;       // Sorgunun çalıştırıldığı veritabanı
+}
+
+message Query {
+  string query_id = 1;
+  string command = 2;
+  string database = 3;
+}
+
+message QueryResult {
+  string query_id = 1;
+  google.protobuf.Any result = 2;
+}
+
+message Error {
+  string code = 1;
+  string message = 2;
+}
+
+message RegistrationResult {
+  string status = 1;
+  string message = 2;
+}
+
+// Agent'ın alarm durumunu bildirmesi için
+message ReportAlarmRequest {
+  string agent_id = 1;
+  repeated AlarmEvent events = 2;
+}
+
+message ReportAlarmResponse {
+  string status = 1;
+}
+
+// Sadece agent kaydı için kullanılacak mesajlar
+message RegisterRequest {
+  AgentInfo agent_info = 1;
+}
+
+message RegisterResponse {
+  RegistrationResult registration = 1;
+}
+
+// Query için kullanılacak mesajlar
+message QueryRequest {
+  Query query = 1;
+}
+
+message QueryResponse {
+  QueryResult result = 1;
+}
+
+// PostgreSQL bilgileri için kullanılacak mesajlar
+message PostgresInfoRequest {
+   PostgresInfo postgres_info = 1;
+}
+
+// MongoDB bilgileri için kullanılacak mesajlar
+message MongoInfoRequest {
+   MongoInfo mongo_info = 1;
+}
+
+message PostgresInfoResponse {
+  string status = 1;
+}
+
+message MongoInfoResponse {
+  string status = 1;
+}
+
+// Genel hata mesajı
+message ErrorResponse {
+  Error error = 1;
+}
+
+// Server'dan agent'a gönderilecek mesajlar
+message ServerMessage {
+  oneof payload {
+    Query query = 1;
+    Error error = 2;
+    RegistrationResult registration = 3;
+    SystemMetricsRequest metrics_request = 4;
+  }
+}
+
+// Eski mesaj yapıları (geriye dönük uyumluluk için)
+message AgentMessage {
+  oneof payload {
+    AgentInfo agent_info = 1;
+    QueryResult query_result = 2;
+    PostgresInfo postgres_info = 3;
+    SystemMetrics system_metrics = 4;
+    MongoInfo mongo_info = 5;
+    MSSQLInfo mssql_info = 6;
+  }
+}
+
+// MSSQL bilgilerini göndermek için mesaj
+message MSSQLInfoRequest {
+  MSSQLInfo mssql_info = 1;
+}
+
+// MSSQL bilgileri için yanıt
+message MSSQLInfoResponse {
+  string status = 1;
+}
+
+message SystemMetrics {
+  double cpu_usage = 1;
+  double memory_usage = 2;
+  double load_average_1m = 3;
+  double load_average_5m = 4;
+  double load_average_15m = 5;
+  int64 total_memory = 6;
+  int64 free_memory = 7;
+  int64 total_disk = 8;
+  int64 free_disk = 9;
+  int32 cpu_cores = 10;
+  string os_version = 11;
+  string kernel_version = 12;
+  int64 uptime = 13;
+  string disk_path = 14;         // Primary disk filesystem/mount point
+  string disk_filesystem = 15;   // Primary disk filesystem type
+}
+
+message SystemMetricsRequest {
+  string agent_id = 1;
+}
+
+message SystemMetricsResponse {
+  string status = 1;
+  google.protobuf.Struct data = 2;
+  SystemMetrics metrics = 3;  // Eklenen alan
+}
+
+// Alarm yapılandırmaları için tanımlanan mesajlar
+message AlarmConfigRequest {
+  string agent_id = 1;
+}
+
+message AlarmConfigResponse {
+  string status = 1;
+  repeated AlarmConfiguration configurations = 2;
+}
+
+// PostgreSQL log file information
+message PostgresLogFile {
+  string name = 1;
+  string path = 2;
+  int64 size = 3;
+  int64 last_modified = 4;
+}
+
+// Request for listing PostgreSQL log files
+message PostgresLogListRequest {
+  string agent_id = 1;
+  string log_path = 2;  // Optional path to look for logs
+}
+
+// Response containing PostgreSQL log files
+message PostgresLogListResponse {
+  repeated PostgresLogFile log_files = 1;
+}
+
+// PostgreSQL log analizi isteği
+message PostgresLogAnalyzeRequest {
+    string log_file_path = 1;
+    int64 slow_query_threshold_ms = 2;  // Yavaş sorgu eşiği (ms)
+    string agent_id = 3;
+}
+
+// PostgreSQL log mesajı
+message PostgresLogEntry {
+    int64 timestamp = 1;          // Unix timestamp
+    string log_level = 2;         // ERROR, WARNING, INFO, LOG, DEBUG
+    string user_name = 3;         // Kullanıcı adı
+    string database = 4;          // Veritabanı adı
+    string process_id = 5;        // Process ID
+    string connection_from = 6;   // Bağlantı kaynağı
+    string session_id = 7;        // Session ID
+    string session_line_num = 8;  // Session satır numarası
+    string command_tag = 9;       // Komut etiketi
+    string session_start_time = 10; // Session başlangıç zamanı
+    string virtual_transaction_id = 11; // Sanal transaction ID
+    string transaction_id = 12;    // Transaction ID
+    string error_severity = 13;    // Hata seviyesi
+    string sql_state_code = 14;    // SQLSTATE kodu
+    string message = 15;           // Log mesajı
+    string detail = 16;            // Detay
+    string hint = 17;              // İpucu
+    string internal_query = 18;    // İç sorgu
+    int64 duration_ms = 19;        // Sorgu süresi (ms)
+}
+
+// PostgreSQL log analizi yanıtı
+message PostgresLogAnalyzeResponse {
+    repeated PostgresLogEntry log_entries = 1;
+}
+
+// PostgreSQL config dosyasını okumak için isteği tanımlayan mesaj
+message PostgresConfigRequest {
+    string agent_id = 1;
+    string config_path = 2;  // Config dosyasının yolu
+}
+
+// PostgreSQL config bilgisi için bir yapı
+message PostgresConfigEntry {
+    string parameter = 1;     // Parametre adı
+    string value = 2;         // Parametre değeri
+    string description = 3;   // Açıklama (varsa)
+    bool is_default = 4;      // Varsayılan değer mi?
+    string category = 5;      // Kategori (memory, logging, etc.)
+}
+
+// PostgreSQL config yanıtı
+message PostgresConfigResponse {
+    string status = 1;
+    string config_path = 2;          // Okunan config dosyasının yolu
+    repeated PostgresConfigEntry configurations = 3; // Yapılandırma girişleri
+}
+
+// MSSQLInfo Microsoft SQL Server bilgilerini içerir
+message MSSQLInfo {
+  string cluster_name = 1;
+  string ip = 2;
+  string hostname = 3;
+  string node_status = 4;
+  string version = 5;
+  string location = 6;
+  string status = 7;
+  string instance = 8;
+  string free_disk = 9;
+  int32 fd_percent = 10;
+  string port = 11;
+  int32 total_vcpu = 12;
+  int64 total_memory = 13;
+  string config_path = 14;
+  string database = 15;
+  bool is_ha_enabled = 16;
+  string ha_role = 17;
+  string edition = 18;
+  AlwaysOnMetrics always_on_metrics = 19; // AlwaysOn metrics bilgileri
+
+}
+
+// SlowQuery yavaş sorgu bilgilerini içerir
+message SlowQuery {
+  string query_text = 1;
+  string database = 2;
+  double duration_ms = 3;
+  string user = 4;
+  string client = 5;
+  int64 timestamp = 6;
+  string status = 7;
+  string command = 8;
+  string wait_type = 9;
+  double wait_time_ms = 10;
+  double cpu_time_ms = 11;
+  int64 reads = 12;
+  int64 writes = 13;
+  int64 logical_reads = 14;
+}
+
+// MSSQLLogFile SQL Server log dosya bilgilerini içerir
+message MSSQLLogFile {
+  string name = 1;
+  string path = 2;
+  int64 size = 3;
+  int64 last_modified = 4;
+}
+
+// Threshold ayarları için mesaj tanımları
+message ThresholdSettings {
+  double cpu_threshold = 1;
+  double memory_threshold = 2;
+  double disk_threshold = 3;
+  int64 slow_query_threshold_ms = 4;
+  int32 connection_threshold = 5;
+  int32 replication_lag_threshold = 6;
+  int64 blocking_query_threshold_ms = 7;
+}
+
+message GetThresholdSettingsRequest {
+  string agent_id = 1;
+}
+
+message GetThresholdSettingsResponse {
+  ThresholdSettings settings = 1;
+}
+
+// Agent versiyon bilgileri için mesaj tanımı
+message AgentVersionInfo {
+  string version = 1;        // agent'ın versiyon numarası
+  string platform = 2;       // işletim sistemi (linux, darwin vs)
+  string architecture = 3;   // cpu mimarisi (amd64, arm64 vs)
+  string hostname = 4;       // sunucu hostname
+  string os_version = 5;     // işletim sistemi versiyonu
+  string go_version = 6;     // Go runtime versiyonu
+}
+
+// Agent versiyon bildirimi için istek mesajı
+message ReportVersionRequest {
+  string agent_id = 1;
+  AgentVersionInfo version_info = 2;
+}
+
+// Agent versiyon bildirimi için yanıt mesajı
+message ReportVersionResponse {
+  string status = 1;
+}
+
+// Job ile ilgili mesaj tipleri
+enum JobStatus {
+  JOB_STATUS_UNKNOWN = 0;
+  JOB_STATUS_PENDING = 1;
+  JOB_STATUS_RUNNING = 2;
+  JOB_STATUS_COMPLETED = 3;
+  JOB_STATUS_FAILED = 4;
+  JOB_STATUS_CANCELLED = 5;
+}
+
+enum JobType {
+  JOB_TYPE_UNKNOWN = 0;
+  JOB_TYPE_MONGO_PROMOTE_PRIMARY = 1;
+  JOB_TYPE_POSTGRES_PROMOTE_MASTER = 2;
+  JOB_TYPE_MONGO_FREEZE_SECONDARY = 3;
+  JOB_TYPE_POSTGRES_CONVERT_TO_SLAVE = 4;
+}
+
+message Job {
+  string job_id = 1;
+  JobType type = 2;
+  JobStatus status = 3;
+  string agent_id = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  string error_message = 7;
+  map<string, string> parameters = 8;
+  string result = 9;
+}
+
+// MongoDB Primary Promotion
+message MongoPromotePrimaryRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string node_hostname = 3;
+  int32 port = 4;
+  string replica_set = 5;
+  string node_status = 6; // "primary" veya "secondary"
+}
+
+message MongoPromotePrimaryResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string error_message = 3;
+  string result = 4;
+}
+
+// Slave node bilgisi için yardımcı mesaj
+message SlaveNode {
+  string hostname = 1;
+  string ip = 2;
+}
+
+// PostgreSQL Master Promotion
+message PostgresPromoteMasterRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string node_hostname = 3;
+  string data_directory = 4;
+  string current_master_host = 5; // Eski master node bilgisi (koordinasyon için)
+  string current_master_ip = 6;   // Eski master IP adresi
+  repeated SlaveNode slaves = 7;  // Diğer slave node'ların listesi
+}
+
+message PostgresPromoteMasterResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string error_message = 3;
+  string result = 4;
+}
+
+// PostgreSQL Convert to Slave
+message ConvertPostgresToSlaveRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string node_hostname = 3;
+  string new_master_host = 4;
+  string new_master_ip = 5;        // ✅ YENİ ALAN
+  int32 new_master_port = 6;
+  string data_directory = 7;
+  string coordination_job_id = 8;  // ✅ YENİ ALAN
+  string old_master_host = 9;      // ✅ YENİ ALAN
+  // replication_user ve replication_password KALDIRILDI - artık agent config'den okunacak
+}
+
+message ConvertPostgresToSlaveResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string result = 3;
+  string error_message = 4;
+}
+
+// Job Status Request/Response
+message GetJobRequest {
+  string job_id = 1;
+}
+
+message GetJobResponse {
+  Job job = 1;
+}
+
+message ListJobsRequest {
+  string agent_id = 1;  // Optional, if empty returns all jobs
+  JobStatus status = 2; // Optional, if unspecified returns all statuses
+  JobType type = 3;    // Optional, if unspecified returns all types
+  int32 limit = 4;     // Optional, limit the number of results
+  int32 offset = 5;    // Optional, offset for pagination
+}
+
+message ListJobsResponse {
+  repeated Job jobs = 1;
+  int32 total = 2;
+}
+
+// MongoDB Freeze Secondary
+message MongoFreezeSecondaryRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string node_hostname = 3;
+  int32 port = 4;
+  string replica_set = 5;
+  int32 seconds = 6; // Default to 60 seconds
+}
+
+message MongoFreezeSecondaryResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string error_message = 3;
+  string result = 4;
+}
+
+// PostgreSQL sorgu planı için istek
+message ExplainQueryRequest {
+  string agent_id = 1;
+  string database = 2;
+  string query = 3;
+}
+
+// PostgreSQL sorgu planı yanıtı
+message ExplainQueryResponse {
+  string plan = 1;
+  string status = 2;
+  string error_message = 3; 
+}
+
+// BestPracticesAnalysisRequest SQL Server best practices analizi için istek
+message BestPracticesAnalysisRequest {
+  string agent_id = 1;
+  string server_name = 2;    // İsteğe bağlı SQL Server adı
+  string database_name = 3;  // İsteğe bağlı veritabanı adı
+}
+
+// BestPracticesAnalysisResponse SQL Server best practices analizi yanıtı
+message BestPracticesAnalysisResponse {
+  string status = 1;
+  string analysis_id = 2;
+  string analysis_timestamp = 3;
+  bytes analysis_results = 4;  // JSON formatında analiz sonuçları
+}
+
+// AlwaysOn Availability Group metrics
+message AlwaysOnMetrics {
+  string cluster_name = 1;
+  string health_state = 2;
+  string operational_state = 3;
+  string synchronization_mode = 4;
+  string failover_mode = 5;
+  string primary_replica = 6;
+  string local_role = 7;
+  repeated ReplicaMetrics replicas = 8;
+  repeated DatabaseReplicaStatus databases = 9;
+  repeated ListenerInfo listeners = 10;
+  string last_failover_time = 11;
+  int64 replication_lag_ms = 12;
+  int64 log_send_queue_kb = 13;
+  int64 redo_queue_kb = 14;
+}
+
+// Replica level metrics
+message ReplicaMetrics {
+  string replica_name = 1;
+  string role = 2;
+  string connection_state = 3;
+  string synchronization_mode = 4;
+  string failover_mode = 5;
+  string availability_mode = 6;
+  string join_state = 7;
+  bool connected_state = 8;
+  string suspend_reason = 9;
+}
+
+// Database level replication status
+message DatabaseReplicaStatus {
+  string database_name = 1;
+  string replica_name = 2;
+  string synchronization_state = 3;
+  string suspend_reason = 4;
+  string last_sent_time = 5;
+  string last_received_time = 6;
+  string last_hardened_time = 7;
+  string last_redone_time = 8;
+  int64 log_send_queue_kb = 9;
+  int64 log_send_rate_kb_per_sec = 10;
+  int64 redo_queue_kb = 11;
+  int64 redo_rate_kb_per_sec = 12;
+  string end_of_log_lsn = 13;
+  string recovery_lsn = 14;
+  string truncation_lsn = 15;
+  string last_commit_lsn = 16;
+  string last_commit_time = 17;
+}
+
+// Listener information
+message ListenerInfo {
+  string listener_name = 1;
+  repeated string ip_addresses = 2;
+  int32 port = 3;
+  string subnet_mask = 4;
+  string listener_state = 5;
+  string dns_name = 6;
+}
+
+// Global Metric System - Genişletilebilir metric yapısı
+message MetricValue {
+  oneof value {
+    double double_value = 1;
+    int64 int_value = 2;
+    string string_value = 3;
+    bool bool_value = 4;
+  }
+}
+
+message MetricTag {
+  string key = 1;
+  string value = 2;
+}
+
+message Metric {
+  string name = 1;                    // Metric adı (örn: "mongodb.operations.insert")
+  MetricValue value = 2;              // Metric değeri
+  repeated MetricTag tags = 3;        // Etiketler (database, collection, vs.)
+  int64 timestamp = 4;                // Unix timestamp (nanoseconds)
+  string unit = 5;                    // Birim (ops/sec, bytes, percent, vs.)
+  string description = 6;             // Açıklama
+}
+
+message MetricBatch {
+  string agent_id = 1;                // Agent ID
+  string metric_type = 2;             // Metric tipi (system, mongodb, postgresql, mssql)
+  repeated Metric metrics = 3;        // Metric listesi
+  int64 collection_timestamp = 4;     // Toplama zamanı
+  map<string, string> metadata = 5;   // Ek metadata
+}
+
+// Agent'dan server'a metric gönderme
+message SendMetricsRequest {
+  MetricBatch batch = 1;
+}
+
+message SendMetricsResponse {
+  string status = 1;
+  string message = 2;
+  int32 processed_count = 3;
+  repeated string errors = 4;
+}
+
+// Server'dan agent'a metric toplama talebi
+message CollectMetricsRequest {
+  string agent_id = 1;
+  repeated string metric_types = 2;   // Hangi tür metrikler toplanacak
+  int32 interval_seconds = 3;         // Toplama aralığı
+  map<string, string> config = 4;    // Ek konfigürasyon
+}
+
+message CollectMetricsResponse {
+  string status = 1;
+  string message = 2;
+}
+
+// Rollback işlemi için request
+message PostgresRollbackRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string reason = 3; // Rollback sebebi (opsiyonel)
+}
+
+// Rollback işlemi için response
+message PostgresRollbackResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string result = 3;
+  string error_message = 4;
+}
+
+// Rollback durumu sorgusu için request
+message PostgresRollbackInfoRequest {
+  string agent_id = 1;
+}
+
+// Rollback durumu sorgusu için response
+message PostgresRollbackInfoResponse {
+  bool has_state = 1;
+  string job_id = 2;
+  string start_time = 3;
+  string current_step = 4;
+  repeated string completed_steps = 5;
+  string original_node_status = 6;
+  string data_directory = 7;
+  string postgresql_version = 8;
+  bool can_rollback = 9;
+  string rollback_reason = 10;
+  string last_error = 11;
+}
+
+// MongoDB Operations Metrics - Özel metric yapıları
+message MongoOperationMetrics {
+  string database = 1;
+  string collection = 2;
+  int64 insert_count = 3;
+  int64 query_count = 4;
+  int64 update_count = 5;
+  int64 delete_count = 6;
+  int64 getmore_count = 7;
+  int64 command_count = 8;
+  double avg_duration_ms = 9;
+  int64 timestamp = 10;
+}
+
+// PostgreSQL Activity Metrics
+message PostgresActivityMetrics {
+  string database = 1;
+  int64 active_connections = 2;
+  int64 idle_connections = 3;
+  int64 total_connections = 4;
+  int64 transactions_per_second = 5;
+  int64 queries_per_second = 6;
+  double cache_hit_ratio = 7;
+  int64 deadlocks = 8;
+  int64 temp_files = 9;
+  int64 temp_bytes = 10;
+  int64 timestamp = 11;
+}
+
+// MSSQL Performance Metrics
+message MSSQLPerformanceMetrics {
+  string database = 1;
+  double cpu_usage_percent = 2;
+  int64 active_connections = 3;
+  int64 total_connections = 4;
+  double buffer_cache_hit_ratio = 5;
+  double page_life_expectancy = 6;
+  int64 batch_requests_per_sec = 7;
+  int64 sql_compilations_per_sec = 8;
+  int64 lock_waits_per_sec = 9;
+  double avg_wait_time_ms = 10;
+  int64 timestamp = 11;
+}
+
+// Disk I/O Metrics
+message DiskIOMetrics {
+  string device = 1;
+  string mountpoint = 2;
+  int64 read_bytes_per_sec = 3;
+  int64 write_bytes_per_sec = 4;
+  int64 read_ops_per_sec = 5;
+  int64 write_ops_per_sec = 6;
+  double read_latency_ms = 7;
+  double write_latency_ms = 8;
+  double utilization_percent = 9;
+  int64 timestamp = 10;
+}
+
+// Network Metrics
+message NetworkMetrics {
+  string interface = 1;
+  int64 rx_bytes_per_sec = 2;
+  int64 tx_bytes_per_sec = 3;
+  int64 rx_packets_per_sec = 4;
+  int64 tx_packets_per_sec = 5;
+  int64 rx_errors = 6;
+  int64 tx_errors = 7;
+  int64 rx_dropped = 8;
+  int64 tx_dropped = 9;
+  int64 timestamp = 10;
+}
+
+// Patroni command execution
+message PatroniCommandRequest {
+  string job_id = 1;
+  string agent_id = 2;
+  string command = 3;
+  repeated string args = 4;
+  map<string, string> metadata = 5;
+}
+
+message PatroniCommandResponse {
+  string job_id = 1;
+  JobStatus status = 2;
+  string command = 3;
+  repeated string args = 4;
+  string output = 5;
+  string error_message = 6;
+  int64 executed_at = 7;
+  int64 duration = 8;
+}
+
+// Patroni cluster status
+message PatroniStatusRequest {
+  string agent_id = 1;
+}
+
+message PatroniStatusResponse {
+  string status = 1;
+  string cluster_name = 2;
+  string node_role = 3;
+  string node_state = 4;
+  string output = 5;
+  int64 last_updated = 6;
+  string error_message = 7;
+}
+
+// Available Patroni commands
+message PatroniCommandsRequest {
+  string agent_id = 1;
+}
+
+message PatroniCommand {
+  string name = 1;
+  string command = 2;
+  repeated string args = 3;
+  string description = 4;
+  string category = 5;
+  bool requires_auth = 6;
+}
+
+message PatroniCommandsResponse {
+  string status = 1;
+  repeated PatroniCommand commands = 2;
+  string error_message = 3;
+}
+
+service AgentService {
+  // Eski bağlantı metodu (geriye dönük uyumluluk için)
+  rpc Connect(stream AgentMessage) returns (stream ServerMessage);
+  
+  // Yeni metodlar...
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  
+  // Query işlemleri için kullanılacak servis
+  rpc ExecuteQuery(QueryRequest) returns (QueryResponse);
+  
+  // PostgreSQL bilgilerini göndermek için kullanılacak servis
+  rpc SendPostgresInfo(PostgresInfoRequest) returns (PostgresInfoResponse);
+  
+  // Sürekli veri akışı gerektiren durumlar için stream servisleri.
+  rpc StreamQueries(stream QueryRequest) returns (stream QueryResponse);
+  rpc StreamPostgresInfo(stream PostgresInfoRequest) returns (stream PostgresInfoResponse);
+  rpc SendSystemMetrics(SystemMetricsRequest) returns (SystemMetricsResponse);
+
+   // Agent'a alarm yapılandırmalarını göndermek için
+  rpc GetAlarmConfigurations(AlarmConfigRequest) returns (AlarmConfigResponse);
+  
+  // Agent'ın alarm bildirmesi için
+  rpc ReportAlarm(ReportAlarmRequest) returns (ReportAlarmResponse);
+
+   // MongoDB bilgilerini göndermek için kullanılacak servis
+  rpc SendMongoInfo(MongoInfoRequest) returns (MongoInfoResponse);
+
+   // MongoDB log dosyalarını listeler
+  rpc ListMongoLogs(MongoLogListRequest) returns (MongoLogListResponse) {}
+  
+  // MongoDB log dosyasını analiz eder
+  rpc AnalyzeMongoLog(MongoLogAnalyzeRequest) returns (MongoLogAnalyzeResponse) {}
+
+  // List PostgreSQL log files
+  rpc ListPostgresLogs(PostgresLogListRequest) returns (PostgresLogListResponse) {}
+
+  // PostgreSQL log dosyasını analiz eder
+  rpc AnalyzePostgresLog(PostgresLogAnalyzeRequest) returns (PostgresLogAnalyzeResponse) {}
+  
+  // PostgreSQL config dosyasını okur
+  rpc ReadPostgresConfig(PostgresConfigRequest) returns (PostgresConfigResponse) {}
+  
+  // Threshold ayarları için yeni RPC metodu
+  rpc GetThresholdSettings(GetThresholdSettingsRequest) returns (GetThresholdSettingsResponse) {}
+  
+  // Yeni versiyon bildirimi metodu
+  rpc ReportVersion(ReportVersionRequest) returns (ReportVersionResponse);
+
+  // Job related methods
+  rpc PromoteMongoToPrimary(MongoPromotePrimaryRequest) returns (MongoPromotePrimaryResponse);
+  rpc FreezeMongoSecondary(MongoFreezeSecondaryRequest) returns (MongoFreezeSecondaryResponse);
+  rpc PromotePostgresToMaster(PostgresPromoteMasterRequest) returns (PostgresPromoteMasterResponse);
+  rpc ConvertPostgresToSlave(ConvertPostgresToSlaveRequest) returns (ConvertPostgresToSlaveResponse);
+  rpc GetJob(GetJobRequest) returns (GetJobResponse);
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse);
+
+  // Sorgu planı için yeni endpoint
+  rpc ExplainQuery(ExplainQueryRequest) returns (ExplainQueryResponse);
+
+  // MSSQL bilgilerini göndermek için kullanılacak servis
+  rpc SendMSSQLInfo(MSSQLInfoRequest) returns (MSSQLInfoResponse);
+  
+  // SQL Server Best Practices Analizi
+  rpc GetBestPracticesAnalysis(BestPracticesAnalysisRequest) returns (BestPracticesAnalysisResponse) {}
+
+  // İşlem log mesajlarını server'a gönderir
+  rpc ReportProcessLogs(ProcessLogRequest) returns (ProcessLogResponse);
+  
+  // Belirli bir işlemin durumunu sorgular
+  rpc GetProcessStatus(ProcessStatusRequest) returns (ProcessStatusResponse);
+
+  // Agent'dan server'a metric gönderme
+  rpc SendMetrics(SendMetricsRequest) returns (SendMetricsResponse);
+
+  // Server'dan agent'a metric toplama talebi
+  rpc CollectMetrics(CollectMetricsRequest) returns (CollectMetricsResponse);
+  
+  // Rollback işlemleri
+  rpc RollbackPostgresFailover(PostgresRollbackRequest) returns (PostgresRollbackResponse);
+  rpc GetPostgresRollbackInfo(PostgresRollbackInfoRequest) returns (PostgresRollbackInfoResponse);
+
+  // Patroni management methods
+  rpc ExecutePatroniCommand(PatroniCommandRequest) returns (PatroniCommandResponse);
+  rpc GetPatroniClusterStatus(PatroniStatusRequest) returns (PatroniStatusResponse);
+  rpc GetPatroniAvailableCommands(PatroniCommandsRequest) returns (PatroniCommandsResponse);
+
+}
