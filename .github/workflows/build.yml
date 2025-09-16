@@ -6,7 +6,7 @@ on:
       platforms:
         description: 'Target platforms (comma separated)'
         required: true
-        default: 'linux/amd64,linux/arm64'
+        default: 'linux/amd64'
         type: string
 
 env:
@@ -17,7 +17,7 @@ env:
 jobs:
   build-amd64:
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     if: contains(github.event.inputs.platforms, 'linux/amd64')
     steps:
       - name: Checkout main branch
@@ -66,8 +66,8 @@ jobs:
         run: |
           # Set image tags
           IMAGE_NAME="${DOCKER_USERNAME}/${DOCKER_IMAGE}"
-          IMAGE_TAG="${IMAGE_NAME}:v${PROJECT_VERSION}-amd64"
-          LATEST_TAG="${IMAGE_NAME}:latest-amd64"
+          IMAGE_TAG="${IMAGE_NAME}:v${PROJECT_VERSION}"
+          LATEST_TAG="${IMAGE_NAME}:latest"
 
           # Build AMD64 platform
           docker buildx build \
@@ -76,131 +76,10 @@ jobs:
             -t "${IMAGE_TAG}" \
             -t "${LATEST_TAG}" \
             -f Dockerfile \
-            --load \
+            --push \
             .
-
-          # Push AMD64 images
-          docker push "${IMAGE_TAG}"
-          docker push "${LATEST_TAG}"
 
           echo "✅ AMD64 build completed"
-
-  build-arm64:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 60
-    if: contains(github.event.inputs.platforms, 'linux/arm64')
-    steps:
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.CE_GH_PAT }}
-
-      - name: Set Project Version
-        run: |
-          if [ -f VERSION ]; then
-            echo "PROJECT_VERSION=$(cat VERSION)" >> $GITHUB_ENV
-          else
-            echo "PROJECT_VERSION=latest" >> $GITHUB_ENV
-          fi
-
-      - name: Checkout release tag
-        uses: actions/checkout@v4
-        with:
-          ref: v${{ env.PROJECT_VERSION }}
-          path: release
-          token: ${{ secrets.CE_GH_PAT }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: false
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
-
-      - name: Build and push ARM64 images
-        working-directory: release
-        env:
-          DOCKER_BUILDKIT: 1
-        run: |
-          # Set image tags
-          IMAGE_NAME="${DOCKER_USERNAME}/${DOCKER_IMAGE}"
-          IMAGE_TAG="${IMAGE_NAME}:v${PROJECT_VERSION}-arm64"
-          LATEST_TAG="${IMAGE_NAME}:latest-arm64"
-
-          # Build ARM64 platform
-          docker buildx build \
-            --no-cache \
-            --platform linux/arm64 \
-            -t "${IMAGE_TAG}" \
-            -t "${LATEST_TAG}" \
-            -f Dockerfile \
-            --load \
-            .
-
-          # Push ARM64 images
-          docker push "${IMAGE_TAG}"
-          docker push "${LATEST_TAG}"
-
-          echo "✅ ARM64 build completed"
-
-  create-manifest:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    needs: [build-amd64, build-arm64]
-    if: contains(github.event.inputs.platforms, ',')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.CE_GH_PAT }}
-
-      - name: Set Project Version
-        run: |
-          if [ -f VERSION ]; then
-            echo "PROJECT_VERSION=$(cat VERSION)" >> $GITHUB_ENV
-          else
-            echo "PROJECT_VERSION=latest" >> $GITHUB_ENV
-          fi
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
-
-      - name: Create multi-platform manifests
-        run: |
-          # Set image names
-          IMAGE_NAME="${DOCKER_USERNAME}/${DOCKER_IMAGE}"
-          MANIFEST_TAG="${IMAGE_NAME}:v${PROJECT_VERSION}"
-          LATEST_TAG="${IMAGE_NAME}:latest"
-
-          # Create manifest list from platform-specific images
-          docker manifest create "${MANIFEST_TAG}" \
-            "${IMAGE_NAME}:v${PROJECT_VERSION}-amd64" \
-            "${IMAGE_NAME}:v${PROJECT_VERSION}-arm64"
-
-          # Push manifest
-          docker manifest push "${MANIFEST_TAG}"
-
-          # Create latest manifest
-          docker manifest create "${LATEST_TAG}" \
-            "${IMAGE_NAME}:latest-amd64" \
-            "${IMAGE_NAME}:latest-arm64"
-
-          docker manifest push "${LATEST_TAG}"
-
-          echo "✅ Multi-platform manifests created"
+          echo "🐳 Images pushed:"
+          echo "   - ${IMAGE_TAG}"
+          echo "   - ${LATEST_TAG}"
