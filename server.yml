@@ -6,9 +6,9 @@ http:
   address: :8080
 
 log:
-  level: info          # debug, info, warn, error
-  format: json         # json, text
-  output: both         # console, file, both
+  level: debug         # debug, info, warn, error
+  format: text         # json, text
+  output: console      # console, file, both
   file_path: logs/clustereye.log
   max_size: 100        # MB
   max_backups: 5       # backup dosya sayısı
