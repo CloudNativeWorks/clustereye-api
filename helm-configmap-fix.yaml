@@ -1,0 +1,46 @@
+# Düzeltilmiş ConfigMap template
+{{- if .Values.configMap.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "clustereye-api.fullname" . }}-config
+  labels:
+    {{- include "clustereye-api.labels" . | nindent 4 }}
+data:
+  server.yml: |
+    server:
+      name: {{ .Values.config.server.name | quote }}
+
+    grpc:
+      address: :{{ .Values.service.grpcTargetPort }}
+
+    http:
+      address: :{{ .Values.service.targetPort }}
+
+    log:
+      level: debug
+      format: text
+      output: console
+      file_path: logs/clustereye.log
+      max_size: 100
+      max_backups: 5
+      max_age: 30
+      compress: true
+
+    database:
+      host: {{ or .Values.global.database.host .Values.config.database.host (printf "%s-postgresql" .Release.Name) | quote }}
+      port: {{ or .Values.global.database.port .Values.config.database.port 5432 }}
+      user: {{ or .Values.global.database.username .Values.config.database.user "postgres" | quote }}
+      password: {{ or .Values.global.database.password .Values.config.database.password "postgres" | quote }}
+      dbname: {{ or .Values.global.database.database .Values.config.database.dbname "clustereye" | quote }}
+      sslmode: {{ or .Values.global.database.sslMode .Values.config.database.sslmode "disable" | quote }}
+
+    influxdb:
+      url: {{ or .Values.global.influxdb.url .Values.config.influxdb.url (printf "http://%s-influxdb:8086" .Release.Name) | quote }}
+      token: {{ or .Values.global.influxdb.token .Values.config.influxdb.token "" | quote }}
+      organization: {{ or .Values.global.influxdb.organization .Values.config.influxdb.organization "clustereye" | quote }}
+      bucket: {{ or .Values.global.influxdb.bucket .Values.config.influxdb.bucket "clustereye" | quote }}
+      enabled: {{ .Values.config.influxdb.enabled }}
+      batch_size: {{ .Values.config.influxdb.batch_size }}
+      flush_interval: {{ .Values.config.influxdb.flush_interval }}
+{{- end }}

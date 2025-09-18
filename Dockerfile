@@ -13,10 +13,13 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+# Build the application with verbose output
+RUN echo "Building binary..." && \
+    CGO_ENABLED=0 GOOS=linux go build -v -a -installsuffix cgo \
     -ldflags '-w -s' \
-    -o clustereye-api ./cmd/api
+    -o clustereye-api ./cmd/api && \
+    echo "Binary built successfully:" && \
+    ls -la clustereye-api
 
 # Final stage
 FROM alpine:3.21
@@ -29,14 +32,18 @@ RUN apk --no-cache add ca-certificates tzdata curl wget busybox-extras && \
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/clustereye-api .
+COPY --from=builder /app/clustereye-api ./clustereye-api
 
 # Copy configuration files
 COPY --from=builder /app/server.yml* ./
 
-# Ensure binary is executable and change ownership
-RUN chmod +x /app/clustereye-api && \
-    chown -R clustereye:clustereye /app
+# Verify binary was copied and make it executable
+RUN echo "Verifying binary after copy:" && \
+    ls -la ./clustereye-api && \
+    chmod +x ./clustereye-api && \
+    chown -R clustereye:clustereye /app && \
+    echo "Final binary check:" && \
+    ls -la ./clustereye-api
 
 # Switch to non-root user
 USER clustereye
@@ -48,22 +55,5 @@ EXPOSE 8080 18000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Add debugging environment variable
-ENV DEBUG_MODE=false
-
-# Create a simple startup script
-RUN echo '#!/bin/sh' > /app/startup.sh && \
-    echo 'set -e' >> /app/startup.sh && \
-    echo 'echo "=== ClusterEye API Debug Info ==="' >> /app/startup.sh && \
-    echo 'echo "Working directory: $(pwd)"' >> /app/startup.sh && \
-    echo 'echo "Files:"' >> /app/startup.sh && \
-    echo 'ls -la' >> /app/startup.sh && \
-    echo 'echo "Binary executable:"' >> /app/startup.sh && \
-    echo 'ls -la ./clustereye-api' >> /app/startup.sh && \
-    echo 'echo "Environment variables:"' >> /app/startup.sh && \
-    echo 'env | grep -E "(DB_|LOG_|INFLUX)" || true' >> /app/startup.sh && \
-    echo 'echo "=== Starting Application ==="' >> /app/startup.sh && \
-    echo 'exec ./clustereye-api "$@"' >> /app/startup.sh && \
-    chmod +x /app/startup.sh
-
-ENTRYPOINT ["/app/startup.sh"]
+# Simple startup
+CMD ["./clustereye-api"]
