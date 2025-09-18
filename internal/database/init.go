@@ -112,21 +112,33 @@ func InitAllTables(db *sql.DB) error {
 
 // executeSQL executes a SQL statement and handles errors
 func executeSQL(db *sql.DB, sqlStatement string) error {
+	fmt.Printf("DEBUG: executeSQL called with statement:\n%s\n", sqlStatement)
+	fmt.Printf("DEBUG: Statement length: %d characters\n", len(sqlStatement))
+
 	// Split multiple statements if they exist
 	statements := strings.Split(sqlStatement, ";\n")
+	fmt.Printf("DEBUG: Split into %d statements\n", len(statements))
 
-	for _, stmt := range statements {
+	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
+			fmt.Printf("DEBUG: Statement %d is empty, skipping\n", i)
 			continue
 		}
 
+		fmt.Printf("DEBUG: Executing statement %d:\n%s\n", i, stmt)
+		fmt.Printf("DEBUG: Statement %d length: %d characters\n", i, len(stmt))
+
 		_, err := db.Exec(stmt)
 		if err != nil {
+			fmt.Printf("DEBUG: Statement %d FAILED with error: %v\n", i, err)
 			return fmt.Errorf("SQL execution failed for statement: %s\nError: %w", stmt, err)
 		}
+
+		fmt.Printf("DEBUG: Statement %d executed successfully\n", i)
 	}
 
+	fmt.Printf("DEBUG: executeSQL completed successfully\n")
 	return nil
 }
 
