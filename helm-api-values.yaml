@@ -1,0 +1,88 @@
+# API Container için Environment Variables örneği
+# Bu değerler Helm template'inizde kullanılmalı
+
+api:
+  enabled: true
+  image:
+    repository: "your-registry/clustereye-api"
+    tag: "latest"
+    pullPolicy: IfNotPresent
+
+  # Environment variables that override server.yml config
+  env:
+    # Database configuration
+    DB_HOST: "clustereye-stack-postgresql"
+    DB_PORT: "5432"
+    DB_USER: "postgres"
+    DB_PASSWORD: "Dkjf334utre1"  # Better to use from secrets
+    DB_NAME: "clustereye"
+    DB_SSLMODE: "disable"
+
+    # InfluxDB configuration
+    INFLUXDB_ENABLED: "true"
+    INFLUXDB_URL: "http://clustereye-stack-influxdb:8086"
+    INFLUXDB_TOKEN: "clustereye-token"  # Better to use from secrets
+    INFLUXDB_ORG: "clustereye"
+    INFLUXDB_BUCKET: "clustereye"
+
+    # Optional debug mode
+    DEBUG_MODE: "false"
+
+  # Resource limits
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+
+  # Service configuration
+  service:
+    type: ClusterIP
+    ports:
+      http: 8080
+      grpc: 50051
+
+  # Ingress configuration (optional)
+  ingress:
+    enabled: false
+    annotations: {}
+    hosts:
+      - host: api.clustereye.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+# Secret management için örnek
+secrets:
+  # Database secret
+  database:
+    password: "Dkjf334utre1"
+
+  # InfluxDB secret
+  influxdb:
+    token: "clustereye-token"
+
+  # JWT ve encryption secrets
+  jwt:
+    secretKey: "your-jwt-secret-key-here"
+  api:
+    secretKey: "your-api-secret-key-here"
+    encryptionKey: "your-encryption-key-here"

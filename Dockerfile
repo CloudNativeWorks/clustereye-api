@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 FROM alpine:3.21
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata && \
+RUN apk --no-cache add ca-certificates tzdata curl wget busybox-extras && \
     addgroup -S clustereye && \
     adduser -S clustereye -G clustereye
 
@@ -47,4 +47,19 @@ EXPOSE 8080 18000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["./clustereye-api"]
+# Add debugging environment variable
+ENV DEBUG_MODE=false
+
+# Create a startup script for better error reporting
+RUN echo '#!/bin/sh' > /app/startup.sh && \
+    echo 'echo "Starting ClusterEye API..."' >> /app/startup.sh && \
+    echo 'echo "Working directory: $(pwd)"' >> /app/startup.sh && \
+    echo 'echo "Configuration files:"' >> /app/startup.sh && \
+    echo 'ls -la *.yml || echo "No yml files found"' >> /app/startup.sh && \
+    echo 'echo "Environment variables:"' >> /app/startup.sh && \
+    echo 'env | grep -E "(DB_|LOG_|INFLUX)" || echo "No relevant env vars found"' >> /app/startup.sh && \
+    echo 'echo "Starting application..."' >> /app/startup.sh && \
+    echo 'exec ./clustereye-api "$@"' >> /app/startup.sh && \
+    chmod +x /app/startup.sh
+
+ENTRYPOINT ["/app/startup.sh"]

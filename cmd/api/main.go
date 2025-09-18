@@ -57,12 +57,12 @@ func main() {
 	// Konfigürasyon yükleniyor
 	cfg, err := config.LoadServerConfig()
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Konfigürasyon yüklenemedi")
+		panic("Konfigürasyon yüklenemedi: " + err.Error())
 	}
 
 	// Logger'ı initialize et
 	if err := logger.InitLogger(cfg.Log); err != nil {
-		logger.Fatal().Err(err).Msg("Logger initialize edilemedi")
+		panic("Logger initialize edilemedi: " + err.Error())
 	}
 
 	logger.Info().Msg("ClusterEye API Server başlatılıyor")

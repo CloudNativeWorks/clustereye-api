@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v2"
 )
@@ -121,6 +122,45 @@ func LoadServerConfig() (*ServerConfig, error) {
 	var config ServerConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("konfigürasyon dosyası ayrıştırılamadı: %w", err)
+	}
+
+	// Environment variable overrides for database
+	if host := os.Getenv("DB_HOST"); host != "" {
+		config.Database.Host = host
+	}
+	if port := os.Getenv("DB_PORT"); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			config.Database.Port = p
+		}
+	}
+	if user := os.Getenv("DB_USER"); user != "" {
+		config.Database.User = user
+	}
+	if password := os.Getenv("DB_PASSWORD"); password != "" {
+		config.Database.Password = password
+	}
+	if dbname := os.Getenv("DB_NAME"); dbname != "" {
+		config.Database.DBName = dbname
+	}
+	if sslmode := os.Getenv("DB_SSLMODE"); sslmode != "" {
+		config.Database.SSLMode = sslmode
+	}
+
+	// Environment variable overrides for InfluxDB
+	if url := os.Getenv("INFLUXDB_URL"); url != "" {
+		config.InfluxDB.URL = url
+	}
+	if token := os.Getenv("INFLUXDB_TOKEN"); token != "" {
+		config.InfluxDB.Token = token
+	}
+	if org := os.Getenv("INFLUXDB_ORG"); org != "" {
+		config.InfluxDB.Organization = org
+	}
+	if bucket := os.Getenv("INFLUXDB_BUCKET"); bucket != "" {
+		config.InfluxDB.Bucket = bucket
+	}
+	if enabled := os.Getenv("INFLUXDB_ENABLED"); enabled != "" {
+		config.InfluxDB.Enabled = enabled == "true"
 	}
 
 	return &config, nil
