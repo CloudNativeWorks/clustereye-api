@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
 )
 
 var encryptionKey []byte

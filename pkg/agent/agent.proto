@@ -6,7 +6,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "github.com/sefaphlvn/clustereye-test/pkg/agent";
+option go_package = "github.com/CloudNativeWorks/clustereye-api/pkg/agent";
 
 message AgentInfo {
   string key = 1;

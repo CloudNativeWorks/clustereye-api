@@ -9,8 +9,8 @@ import (
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
-	"github.com/sefaphlvn/clustereye-test/internal/config"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/config"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 

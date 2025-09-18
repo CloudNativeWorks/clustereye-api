@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
 )
 
 // AWSRateLimiter, AWS API'leri için rate limiting yapısı

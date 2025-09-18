@@ -20,8 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	_ "github.com/denisenkom/go-mssqldb" // SQL Server driver
 	"github.com/gin-gonic/gin"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
-	"github.com/sefaphlvn/clustereye-test/internal/server"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/server"
 )
 
 // AWSCredentials, AWS kimlik bilgilerini temsil eder

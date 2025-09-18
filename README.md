@@ -55,7 +55,7 @@ clustereye/
 
 1. Projeyi klonlayın:
 ```bash
-git clone https://github.com/sefaphlvn/clustereye-test.git
+git clone https://github.com/CloudNativeWorks/clustereye-api.git
 cd clustereye-test
 ```
 

@@ -1,4 +1,4 @@
-module github.com/sefaphlvn/clustereye-test
+module github.com/CloudNativeWorks/clustereye-api
 
 go 1.23.0
 
@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.47.0
 	github.com/aws/aws-sdk-go-v2/service/rds v1.101.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.36.0
+	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
@@ -41,7 +42,6 @@ require (
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
 	github.com/deepmap/oapi-codegen v1.8.2 // indirect
-	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.0.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect

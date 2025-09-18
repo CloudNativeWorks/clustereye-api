@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sefaphlvn/clustereye-test/internal/api"
-	"github.com/sefaphlvn/clustereye-test/internal/config"
-	"github.com/sefaphlvn/clustereye-test/internal/database"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
-	"github.com/sefaphlvn/clustereye-test/internal/metrics"
-	"github.com/sefaphlvn/clustereye-test/internal/server"
-	pb "github.com/sefaphlvn/clustereye-test/pkg/agent"
+	"github.com/CloudNativeWorks/clustereye-api/internal/api"
+	"github.com/CloudNativeWorks/clustereye-api/internal/config"
+	"github.com/CloudNativeWorks/clustereye-api/internal/database"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/metrics"
+	"github.com/CloudNativeWorks/clustereye-api/internal/server"
+	pb "github.com/CloudNativeWorks/clustereye-api/pkg/agent"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -72,14 +72,28 @@ func main() {
 		logger.Fatal().Err(err).Msg("Encryption initialize edilemedi")
 	}
 
-	// Veritabanı bağlantısı
-	db, err := database.ConnectDatabase(cfg.Database)
+	// Veritabanı başlatma ve bağlantısı
+	dbConfig := database.Config{
+		Host:     cfg.Database.Host,
+		Port:     cfg.Database.Port,
+		User:     cfg.Database.User,
+		Password: cfg.Database.Password,
+		DBName:   cfg.Database.DBName,
+		SSLMode:  cfg.Database.SSLMode,
+	}
+
+	db, err := database.InitDatabase(dbConfig)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("Veritabanı bağlantısı kurulamadı")
+		logger.Fatal().Err(err).Msg("Veritabanı başlatılamadı")
 	}
 	defer db.Close()
 
-	logger.Info().Str("host", cfg.Database.Host).Int("port", cfg.Database.Port).Msg("Veritabanı bağlantısı kuruldu")
+	// Tabloları oluştur
+	if err := database.InitAllTables(db); err != nil {
+		logger.Fatal().Err(err).Msg("Veritabanı tabloları oluşturulamadı")
+	}
+
+	logger.Info().Str("host", cfg.Database.Host).Int("port", cfg.Database.Port).Msg("Veritabanı bağlantısı kuruldu ve tablolar hazırlandı")
 
 	// InfluxDB Writer'ı başlat
 	influxWriter, err := metrics.NewInfluxDBWriter(cfg.InfluxDB)

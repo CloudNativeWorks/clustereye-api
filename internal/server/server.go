@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sefaphlvn/clustereye-test/internal/database"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
-	"github.com/sefaphlvn/clustereye-test/internal/metrics"
-	pb "github.com/sefaphlvn/clustereye-test/pkg/agent"
+	"github.com/CloudNativeWorks/clustereye-api/internal/database"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/metrics"
+	pb "github.com/CloudNativeWorks/clustereye-api/pkg/agent"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
 

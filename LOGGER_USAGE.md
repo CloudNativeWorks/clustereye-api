@@ -42,7 +42,7 @@ log:
 ### Temel Kullanım
 
 ```go
-import "github.com/sefaphlvn/clustereye-test/internal/logger"
+import "github.com/CloudNativeWorks/clustereye-api/internal/logger"
 
 // Basit mesajlar
 logger.Info().Msg("Sunucu başlatıldı")

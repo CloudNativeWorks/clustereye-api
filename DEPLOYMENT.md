@@ -10,7 +10,7 @@ En basit kurulum yöntemi:
 
 ```bash
 # Projeyi klonlayın
-git clone https://github.com/sefaphlvn/clustereye-test.git
+git clone https://github.com/CloudNativeWorks/clustereye-api.git
 cd clustereye-test
 
 # Otomatik deployment scriptini çalıştırın
@@ -230,7 +230,7 @@ docker system prune -a
 
 ## 📞 Destek
 
-- 📚 **Dokümantasyon**: [GitHub README](https://github.com/sefaphlvn/clustereye-test)
+- 📚 **Dokümantasyon**: [GitHub README](https://github.com/CloudNativeWorks/clustereye-api)
 - 🐛 **Bug Report**: GitHub Issues
 - 💬 **Topluluk**: GitHub Discussions
 

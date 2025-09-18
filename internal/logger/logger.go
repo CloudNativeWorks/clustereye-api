@@ -10,7 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/sefaphlvn/clustereye-test/internal/config"
+	"github.com/CloudNativeWorks/clustereye-api/internal/config"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 

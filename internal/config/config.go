@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/sefaphlvn/clustereye-test/internal/database"
 	"gopkg.in/yaml.v2"
 )
 
@@ -20,6 +19,16 @@ type LogConfig struct {
 	MaxBackups int    `yaml:"max_backups"` // tutulacak maksimum eski dosya sayısı
 	MaxAge     int    `yaml:"max_age"`     // gün cinsinden maksimum yaş
 	Compress   bool   `yaml:"compress"`    // eski dosyaları sıkıştır
+}
+
+// DatabaseConfig, veritabanı bağlantı ayarlarını içerir
+type DatabaseConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	DBName   string `yaml:"dbname"`
+	SSLMode  string `yaml:"sslmode"`
 }
 
 // ServerConfig, ClusterEye sunucusu için konfigürasyon yapısı
@@ -43,7 +52,7 @@ type ServerConfig struct {
 	Log LogConfig `yaml:"log"`
 
 	// Veritabanı ayarları
-	Database database.Config `yaml:"database"`
+	Database DatabaseConfig `yaml:"database"`
 
 	// InfluxDB Configuration
 	InfluxDB InfluxDBConfig `yaml:"influxdb"`
@@ -167,7 +176,7 @@ func createDefaultServerConfig(configPath string) (*ServerConfig, error) {
 		Compress:   true,
 	}
 
-	config.Database = database.Config{
+	config.Database = DatabaseConfig{
 		Host:     "localhost",
 		Port:     5432,
 		User:     "postgres",

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sefaphlvn/clustereye-test/internal/server"
+	"github.com/CloudNativeWorks/clustereye-api/internal/server"
 )
 
 // PostgreSQL System Metrics Handlers

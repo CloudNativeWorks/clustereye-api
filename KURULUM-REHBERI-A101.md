@@ -105,7 +105,7 @@ dig admin-a101.clustereye.com
 cd /opt
 
 # Projeyi klonla
-sudo git clone https://github.com/sefaphlvn/clustereye-test.git
+sudo git clone https://github.com/CloudNativeWorks/clustereye-api.git
 sudo chown -R $USER:$USER clustereye-test
 cd clustereye-test
 ```

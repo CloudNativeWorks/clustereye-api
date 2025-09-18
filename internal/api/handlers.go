@@ -16,9 +16,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
-	"github.com/sefaphlvn/clustereye-test/internal/server"
-	pb "github.com/sefaphlvn/clustereye-test/pkg/agent"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
+	"github.com/CloudNativeWorks/clustereye-api/internal/server"
+	pb "github.com/CloudNativeWorks/clustereye-api/pkg/agent"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"

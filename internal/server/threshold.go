@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/sefaphlvn/clustereye-test/internal/logger"
-	pb "github.com/sefaphlvn/clustereye-test/pkg/agent"
+	"github.com/CloudNativeWorks/clustereye-api/internal/logger"
+	pb "github.com/CloudNativeWorks/clustereye-api/pkg/agent"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
