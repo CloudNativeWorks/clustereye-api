@@ -14,6 +14,9 @@ func InitDatabase(cfg Config) (*sql.DB, error) {
 	tempCfg := cfg
 	tempCfg.DBName = "postgres" // Connect to default postgres database
 
+	fmt.Printf("DEBUG: InitDatabase connecting with - Host: %s, Port: %d, User: %s, DBName: %s\n",
+		tempCfg.Host, tempCfg.Port, tempCfg.User, tempCfg.DBName)
+
 	connStr := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		tempCfg.Host, tempCfg.Port, tempCfg.User, tempCfg.Password, tempCfg.DBName, tempCfg.SSLMode,
