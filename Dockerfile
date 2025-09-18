@@ -51,35 +51,19 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Add debugging environment variable
 ENV DEBUG_MODE=false
 
-# Create a more robust startup script
-RUN cat > /app/startup.sh << 'EOF' && \
-#!/bin/sh
-set -e
-
-echo "=== ClusterEye API Starting ==="
-echo "Working directory: $(pwd)"
-echo "User: $(whoami)"
-echo "Date: $(date)"
-
-echo "=== Configuration Files ==="
-ls -la *.yml 2>/dev/null || echo "No yml files found"
-
-echo "=== Environment Variables ==="
-env | grep -E "(DB_|LOG_|INFLUX)" || echo "No relevant env vars found"
-
-echo "=== Binary Check ==="
-ls -la ./clustereye-api || echo "Binary not found"
-file ./clustereye-api || echo "Cannot check binary type"
-
-echo "=== Network Check ==="
-if command -v nslookup >/dev/null 2>&1; then
-    nslookup clustereye-stack-postgresql || echo "DNS lookup failed"
-fi
-
-echo "=== Starting Application ==="
-exec ./clustereye-api "$@"
-EOF
-
-RUN chmod +x /app/startup.sh
+# Create a simple startup script
+RUN echo '#!/bin/sh' > /app/startup.sh && \
+    echo 'set -e' >> /app/startup.sh && \
+    echo 'echo "=== ClusterEye API Debug Info ==="' >> /app/startup.sh && \
+    echo 'echo "Working directory: $(pwd)"' >> /app/startup.sh && \
+    echo 'echo "Files:"' >> /app/startup.sh && \
+    echo 'ls -la' >> /app/startup.sh && \
+    echo 'echo "Binary executable:"' >> /app/startup.sh && \
+    echo 'ls -la ./clustereye-api' >> /app/startup.sh && \
+    echo 'echo "Environment variables:"' >> /app/startup.sh && \
+    echo 'env | grep -E "(DB_|LOG_|INFLUX)" || true' >> /app/startup.sh && \
+    echo 'echo "=== Starting Application ==="' >> /app/startup.sh && \
+    echo 'exec ./clustereye-api "$@"' >> /app/startup.sh && \
+    chmod +x /app/startup.sh
 
 ENTRYPOINT ["/app/startup.sh"]
