@@ -4,6 +4,15 @@ grpc:
   address: :50051
 http:
   address: :8080
+log:
+  level: info
+  format: json
+  output: console
+  file_path: logs/clustereye.log
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
 database:
   host: localhost
   port: 5432
@@ -11,3 +20,11 @@ database:
   password: Dkjf334utre1
   dbname: clustereye
   sslmode: disable
+influxdb:
+  url: http://localhost:8086
+  token: ""
+  organization: clustereye
+  bucket: clustereye
+  enabled: false
+  batch_size: 1000
+  flush_interval: 10
