@@ -1,0 +1,8 @@
+# Düzeltilmiş deployment volumeMounts
+          {{- if .Values.configMap.enabled }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/server.yml
+              subPath: server.yml
+              readOnly: true
+          {{- end }}

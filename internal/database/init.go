@@ -129,8 +129,7 @@ func executeSQL(db *sql.DB, sqlStatement string) error {
 
 // createUpdateTriggerFunction creates the trigger function for updated_at columns
 func createUpdateTriggerFunction(db *sql.DB) error {
-	sql := `
-	CREATE OR REPLACE FUNCTION update_updated_at_column()
+	sql := `CREATE OR REPLACE FUNCTION update_updated_at_column()
 	RETURNS TRIGGER AS $$
 	BEGIN
 		NEW.updated_at = CURRENT_TIMESTAMP;
