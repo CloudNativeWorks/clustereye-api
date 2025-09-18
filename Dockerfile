@@ -79,6 +79,7 @@ fi
 echo "=== Starting Application ==="
 exec ./clustereye-api "$@"
 EOF
-chmod +x /app/startup.sh
+
+RUN chmod +x /app/startup.sh
 
 ENTRYPOINT ["/app/startup.sh"]
