@@ -16,7 +16,7 @@ log:
   compress: true       # eski dosyaları sıkıştır
 
 database:
-  host: clustereye-stack-postgresql
+  host: clustereye-postgresql
   port: 5432
   user: postgres
   password: Dkjf334utre1
@@ -25,7 +25,7 @@ database:
 
 influxdb:
   enabled: true
-  url: "http://clustereye-stack-influxdb:8086"
+  url: "http://clustereye-influxdb:8086"
   token: "clustereye-token"
   organization: "clustereye"
   bucket: "clustereye"

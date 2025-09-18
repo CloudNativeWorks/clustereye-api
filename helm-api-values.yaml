@@ -11,7 +11,7 @@ api:
   # Environment variables that override server.yml config
   env:
     # Database configuration
-    DB_HOST: "clustereye-stack-postgresql"
+    DB_HOST: "clustereye-postgresql"
     DB_PORT: "5432"
     DB_USER: "postgres"
     DB_PASSWORD: "Dkjf334utre1"  # Better to use from secrets
@@ -20,7 +20,7 @@ api:
 
     # InfluxDB configuration
     INFLUXDB_ENABLED: "true"
-    INFLUXDB_URL: "http://clustereye-stack-influxdb:8086"
+    INFLUXDB_URL: "http://clustereye-influxdb:8086"
     INFLUXDB_TOKEN: "clustereye-token"  # Better to use from secrets
     INFLUXDB_ORG: "clustereye"
     INFLUXDB_BUCKET: "clustereye"
