@@ -1,5 +1,5 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
+# Build stage - explicitly use AMD64 for Ubuntu clusters
+FROM --platform=linux/amd64 golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -13,16 +13,16 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application with verbose output
+# Build the application
 RUN echo "Building binary..." && \
-    CGO_ENABLED=0 GOOS=linux go build -v -a -installsuffix cgo \
+    CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -ldflags '-w -s' \
     -o clustereye-api ./cmd/api && \
     echo "Binary built successfully:" && \
     ls -la clustereye-api
 
-# Final stage
-FROM alpine:3.21
+# Final stage - explicitly use AMD64 for Ubuntu clusters
+FROM --platform=linux/amd64 alpine:3.21
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata curl wget busybox-extras && \
@@ -55,5 +55,5 @@ EXPOSE 8080 18000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Simple startup
+# Run the application
 CMD ["./clustereye-api"]
