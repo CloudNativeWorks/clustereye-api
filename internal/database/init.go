@@ -115,7 +115,21 @@ func executeSQL(db *sql.DB, sqlStatement string) error {
 	fmt.Printf("DEBUG: executeSQL called with statement:\n%s\n", sqlStatement)
 	fmt.Printf("DEBUG: Statement length: %d characters\n", len(sqlStatement))
 
-	// Split multiple statements if they exist
+	// For single statements or PostgreSQL functions, execute directly
+	// Don't split if it contains $$ (dollar-quoted strings)
+	if strings.Contains(sqlStatement, "$$") {
+		fmt.Printf("DEBUG: Contains dollar-quoted strings, executing as single statement\n")
+		stmt := strings.TrimSpace(sqlStatement)
+		_, err := db.Exec(stmt)
+		if err != nil {
+			fmt.Printf("DEBUG: Single statement FAILED with error: %v\n", err)
+			return fmt.Errorf("SQL execution failed for statement: %s\nError: %w", stmt, err)
+		}
+		fmt.Printf("DEBUG: Single statement executed successfully\n")
+		return nil
+	}
+
+	// Split multiple statements if they exist (for regular SQL without $$ blocks)
 	statements := strings.Split(sqlStatement, ";\n")
 	fmt.Printf("DEBUG: Split into %d statements\n", len(statements))
 
