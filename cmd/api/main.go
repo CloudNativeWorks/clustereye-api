@@ -113,13 +113,13 @@ func main() {
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
-		
+
 		// Keepalive enforcement policy - ENHANCE_YOUR_CALM hatasını önlemek için
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             60 * time.Second, // Minimum interval between pings
 			PermitWithoutStream: false,            // Require active streams for pings
 		}),
-		
+
 		// Server keepalive parameters
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionIdle:     2 * time.Minute,  // Close idle connections after 2 minutes
@@ -156,7 +156,7 @@ func main() {
 
 	// CORS middleware'ini yapılandır
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "https://senbaris.github.io", "https://clabapi.clustereye.com", "https://commercelab.clustereye.com", "https://mlpapi.clustereye.com", "https://mlp.clustereye.com", "https://mytechnicapi.clustereye.com", "https://mytechnic.clustereye.com"},
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "http://demoui.clustereye.com:30000", "https://demoapi.clustereye.com:30000", "https://clabapi.clustereye.com", "https://commercelab.clustereye.com", "https://mlpapi.clustereye.com", "https://mlp.clustereye.com", "https://mytechnicapi.clustereye.com", "https://mytechnic.clustereye.com"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "Cookie"},
 		ExposeHeaders:    []string{"Content-Length", "Authorization"},
