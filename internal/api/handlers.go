@@ -326,6 +326,7 @@ func RegisterHandlers(router *gin.Engine, server *server.Server) {
 		mssql.GET("/transactions", getMSSQLTransactionsMetrics(server))
 		mssql.GET("/transactions-rates", getMSSQLTransactionsRateMetrics(server))
 		mssql.GET("/all", getMSSQLAllMetrics(server))
+		mssql.GET("/queries", getMSSQLQueryMetrics(server))
 	}
 
 	// AWS RDS Endpoint'leri - AUTH GEREKTİRİR
@@ -3559,6 +3560,48 @@ func getMSSQLTransactionsRateMetrics(server *server.Server) gin.HandlerFunc {
 			"status": "success",
 			"data":   results,
 			"note":   "Rate hesaplaması yapılmış değerler (per second)",
+		})
+	}
+}
+
+// getMSSQLQueryMetrics, MSSQL query performance metriklerini getirir (anomaly detection için)
+func getMSSQLQueryMetrics(server *server.Server) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		agentID := c.Query("agent_id")
+		timeRange := c.DefaultQuery("range", "1h")
+
+		var query string
+		if agentID != "" {
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration") |> filter(fn: (r) => r.agent_id =~ /^%s$/) |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange, regexp.QuoteMeta(agentID))
+		} else {
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration") |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange)
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+		defer cancel()
+
+		influxWriter := server.GetInfluxWriter()
+		if influxWriter == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "error",
+				"error":  "InfluxDB servisi kullanılamıyor",
+			})
+			return
+		}
+
+		results, err := influxWriter.QueryMetrics(ctx, query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "MSSQL query metriklerini alırken hata: " + err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   results,
+			"note":   "MSSQL query performance metrics for anomaly detection",
 		})
 	}
 }
