@@ -801,6 +801,11 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 		return nil, fmt.Errorf("agent bulunamadı: %s", agentID)
 	}
 
+	// Stream bağlantısının geçerli olduğunu kontrol et
+	if agentConn.Stream == nil {
+		return nil, fmt.Errorf("agent bağlantısı geçersiz: %s", agentID)
+	}
+
 	// Sorgu cevabı için bir kanal oluştur
 	resultChan := make(chan *pb.QueryResult, 1)
 
@@ -1316,7 +1321,8 @@ func (s *Server) writeActiveQueryToInfluxDB(ctx context.Context, agentID string,
 
 	// Query text field'ı - debug ile birlikte
 	if queryText, ok := queryData["query"].(string); ok {
-		fields["text"] = queryText
+		fields["query_text"] = queryText  // text yerine query_text kullan
+		fields["text"] = queryText        // backward compatibility için text'i de ekle
 		logger.Debug().
 			Str("agent_id", agentID).
 			Str("query_text", queryText).

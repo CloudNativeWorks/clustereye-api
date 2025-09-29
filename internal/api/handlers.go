@@ -253,6 +253,7 @@ func RegisterHandlers(router *gin.Engine, server *server.Server) {
 				performance.GET("/index-scan-ratio", getPostgreSQLPerformanceIndexScanRatioMetrics(server))
 				performance.GET("/seq-scan-ratio", getPostgreSQLPerformanceSeqScanRatioMetrics(server))
 				performance.GET("/cache-hit-ratio", getPostgreSQLPerformanceCacheHitRatioMetrics(server))
+				performance.GET("/queries", getPostgresQueryMetrics(server))
 				performance.GET("/all", getPostgreSQLPerformanceAllMetrics(server))
 			}
 		}
@@ -3572,9 +3573,9 @@ func getMSSQLQueryMetrics(server *server.Server) gin.HandlerFunc {
 
 		var query string
 		if agentID != "" {
-			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration") |> filter(fn: (r) => r.agent_id =~ /^%s$/) |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange, regexp.QuoteMeta(agentID))
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration" or r._field == "value") |> filter(fn: (r) => r.agent_id =~ /^%s$/) |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange, regexp.QuoteMeta(agentID))
 		} else {
-			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration") |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange)
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "mssql_query") |> filter(fn: (r) => r._field == "avg_cpu_time_ms" or r._field == "avg_duration_ms" or r._field == "avg_logical_reads" or r._field == "avg_physical_reads" or r._field == "execution_count" or r._field == "total_duration" or r._field == "value") |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange)
 		}
 
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
@@ -3602,6 +3603,48 @@ func getMSSQLQueryMetrics(server *server.Server) gin.HandlerFunc {
 			"status": "success",
 			"data":   results,
 			"note":   "MSSQL query performance metrics for anomaly detection",
+		})
+	}
+}
+
+// getPostgresQueryMetrics, PostgreSQL query performance metriklerini getirir (anomaly detection için)
+func getPostgresQueryMetrics(server *server.Server) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		agentID := c.Query("agent_id")
+		timeRange := c.DefaultQuery("range", "1h")
+
+		var query string
+		if agentID != "" {
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "postgresql_query") |> filter(fn: (r) => r._field == "execution_count" or r._field == "avg_duration_ms" or r._field == "total_duration_ms" or r._field == "total_io_read_bytes" or r._field == "total_io_write_bytes" or r._field == "total_rows_returned" or r._field == "avg_rows_returned" or r._field == "text") |> filter(fn: (r) => r.agent_id =~ /^%s$/) |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange, regexp.QuoteMeta(agentID))
+		} else {
+			query = fmt.Sprintf(`from(bucket: "clustereye") |> range(start: -%s) |> filter(fn: (r) => r._measurement == "postgresql_query") |> filter(fn: (r) => r._field == "execution_count" or r._field == "avg_duration_ms" or r._field == "total_duration_ms" or r._field == "total_io_read_bytes" or r._field == "total_io_write_bytes" or r._field == "total_rows_returned" or r._field == "avg_rows_returned" or r._field == "text") |> aggregateWindow(every: 5m, fn: mean, createEmpty: false)`, timeRange)
+		}
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+		defer cancel()
+
+		influxWriter := server.GetInfluxWriter()
+		if influxWriter == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "error",
+				"error":  "InfluxDB servisi kullanılamıyor",
+			})
+			return
+		}
+
+		results, err := influxWriter.QueryMetrics(ctx, query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "PostgreSQL query metriklerini alırken hata: " + err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status": "success",
+			"data":   results,
+			"note":   "PostgreSQL query performance metrics for anomaly detection",
 		})
 	}
 }
