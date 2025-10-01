@@ -97,12 +97,23 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 		if err != nil {
 			// gRPC status kodunu al
 			if status, ok := grpcstatus.FromError(err); ok {
-				logger.Error().
+				logEvent := logger.Error().
 					Err(err).
 					Str("agent_id", currentAgentID).
 					Str("grpc_code", status.Code().String()).
-					Str("grpc_message", status.Message()).
-					Msg("Agent bağlantısı kapandı - gRPC hatası")
+					Str("grpc_message", status.Message())
+
+				// Özel durumlar için ek bilgi
+				switch status.Code().String() {
+				case "Canceled":
+					logEvent.Msg("Agent bağlantısı kapandı - Context iptal edildi (agent veya network timeout olabilir)")
+				case "DeadlineExceeded":
+					logEvent.Msg("Agent bağlantısı kapandı - Timeout aşıldı")
+				case "Unavailable":
+					logEvent.Msg("Agent bağlantısı kapandı - Agent ulaşılamıyor (restart veya network sorunu olabilir)")
+				default:
+					logEvent.Msg("Agent bağlantısı kapandı - gRPC hatası")
+				}
 			} else {
 				logger.Error().
 					Err(err).
@@ -118,7 +129,7 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 					conn.Stream = nil
 					logger.Warn().
 						Str("agent_id", currentAgentID).
-						Msg("Stream nil yapıldı")
+						Msg("Stream nil yapıldı - Agent yeniden bağlanana kadar beklenecek")
 				}
 				s.mu.Unlock()
 
@@ -130,7 +141,9 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 				// Agent'ın veritabanındaki durumunu güncelle
 				s.UpdateAgentDisconnectedStatus(currentAgentID)
 
-				logger.Info().Str("agent_id", currentAgentID).Msg("Agent bağlantısı kapatıldı, disconnected olarak işaretlendi")
+				logger.Info().
+					Str("agent_id", currentAgentID).
+					Msg("Agent bağlantısı kapatıldı, disconnected olarak işaretlendi - Agent yeniden Connect() çağırmalı")
 			}
 
 			return err
@@ -173,8 +186,9 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 				return err
 			}
 
-			// Agent'ı bağlantı listesine ekle
+			// Agent'ı bağlantı listesine ekle (veya stream'i güncelle)
 			s.mu.Lock()
+			existingAgent, wasExisting := s.agents[currentAgentID]
 			s.agents[currentAgentID] = &AgentConnection{
 				Stream: stream,
 				Info:   agentInfo,
@@ -186,10 +200,19 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 			s.lastPingTime[currentAgentID] = time.Now()
 			s.lastPingMu.Unlock()
 
-			logger.Info().
-				Str("agent_id", currentAgentID).
-				Int("total_connections", len(s.agents)).
-				Msg("Agent bağlantı listesine eklendi")
+			if wasExisting && existingAgent.Stream == nil {
+				logger.Info().
+					Str("agent_id", currentAgentID).
+					Str("hostname", agentInfo.Hostname).
+					Int("total_connections", len(s.agents)).
+					Msg("Agent YENİDEN BAĞLANDI - Stream güncellendi (reconnection başarılı)")
+			} else {
+				logger.Info().
+					Str("agent_id", currentAgentID).
+					Str("hostname", agentInfo.Hostname).
+					Int("total_connections", len(s.agents)).
+					Msg("Agent ilk kez bağlandı")
+			}
 
 			// Başarılı kayıt mesajı gönder
 			stream.Send(&pb.ServerMessage{

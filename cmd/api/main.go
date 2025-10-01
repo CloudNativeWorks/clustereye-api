@@ -122,9 +122,9 @@ func main() {
 
 		// Server keepalive parameters
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionIdle:     2 * time.Minute,  // Close idle connections after 2 minutes
-			MaxConnectionAge:      30 * time.Minute, // Close connections after 30 minutes
-			MaxConnectionAgeGrace: 5 * time.Minute,  // Grace period for closing connections
+			MaxConnectionIdle:     0,                // Disable idle connection timeout (infinite)
+			MaxConnectionAge:      0,                // Disable max connection age (infinite)
+			MaxConnectionAgeGrace: 0,                // Disable grace period (infinite)
 			Time:                  60 * time.Second, // Send pings every 60 seconds
 			Timeout:               10 * time.Second, // Wait 10 seconds for ping response
 		}),
