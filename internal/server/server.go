@@ -23,7 +23,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -95,7 +95,20 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 	for {
 		in, err := stream.Recv()
 		if err != nil {
-			logger.Error().Err(err).Str("agent_id", currentAgentID).Msg("Agent bağlantısı kapandı")
+			// gRPC status kodunu al
+			if status, ok := grpcstatus.FromError(err); ok {
+				logger.Error().
+					Err(err).
+					Str("agent_id", currentAgentID).
+					Str("grpc_code", status.Code().String()).
+					Str("grpc_message", status.Message()).
+					Msg("Agent bağlantısı kapandı - gRPC hatası")
+			} else {
+				logger.Error().
+					Err(err).
+					Str("agent_id", currentAgentID).
+					Msg("Agent bağlantısı kapandı - non-gRPC hatası")
+			}
 
 			// Agent'ı silmek yerine, sadece Stream'i nil yap ve bağlantı durumunu güncelle
 			if currentAgentID != "" {
@@ -103,6 +116,9 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 				if conn, exists := s.agents[currentAgentID]; exists && conn != nil {
 					// Stream'i nil yap ama agent bilgilerini sakla
 					conn.Stream = nil
+					logger.Warn().
+						Str("agent_id", currentAgentID).
+						Msg("Stream nil yapıldı")
 				}
 				s.mu.Unlock()
 
@@ -119,6 +135,10 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 
 			return err
 		}
+
+		logger.Debug().
+			Str("agent_id", currentAgentID).
+			Msg("Stream'den mesaj alındı")
 
 		switch payload := in.Payload.(type) {
 		case *pb.AgentMessage_AgentInfo:
@@ -188,7 +208,10 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 
 		case *pb.AgentMessage_QueryResult:
 			queryResult := payload.QueryResult
-			logger.Debug().Str("agent_id", currentAgentID).Msg("Agent sorguya cevap verdi")
+			logger.Info().
+				Str("agent_id", currentAgentID).
+				Str("query_id", queryResult.QueryId).
+				Msg("Agent'tan sorgu yanıtı alındı")
 
 			// Ping yanıtlarını kontrol et
 			if strings.HasPrefix(queryResult.QueryId, "ping_") {
@@ -210,7 +233,21 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 			s.queryMu.RUnlock()
 
 			if ok && queryResp.ResultChan != nil {
+				logger.Info().
+					Str("agent_id", currentAgentID).
+					Str("query_id", queryResult.QueryId).
+					Msg("Query result channel bulundu, yanıt gönderiliyor")
 				queryResp.ResultChan <- queryResult
+				logger.Info().
+					Str("agent_id", currentAgentID).
+					Str("query_id", queryResult.QueryId).
+					Msg("Yanıt channel'a başarıyla gönderildi")
+			} else {
+				logger.Warn().
+					Str("agent_id", currentAgentID).
+					Str("query_id", queryResult.QueryId).
+					Bool("found_in_map", ok).
+					Msg("Query result channel bulunamadı veya nil - yanıt gönderilemedi")
 			}
 		}
 	}
@@ -561,7 +598,7 @@ func (s *Server) StreamPostgresInfo(stream pb.AgentService_StreamPostgresInfoSer
 func (s *Server) GetStatusPostgres(ctx context.Context, _ *structpb.Struct) (*structpb.Value, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT json_agg(sub.jsondata) FROM (SELECT jsondata FROM postgres_data ORDER BY id) AS sub")
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
 	}
 	defer rows.Close()
 
@@ -569,19 +606,19 @@ func (s *Server) GetStatusPostgres(ctx context.Context, _ *structpb.Struct) (*st
 	if rows.Next() {
 		err := rows.Scan(&jsonData)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
+			return nil, grpcstatus.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
 		}
 	}
 
 	// JSON verisini structpb.Value'ya dönüştür
 	var jsonValue interface{}
 	if err := json.Unmarshal(jsonData, &jsonValue); err != nil {
-		return nil, status.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
 	}
 
 	value, err := structpb.NewValue(jsonValue)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
 	}
 
 	return value, nil
@@ -782,11 +819,13 @@ func (s *Server) UpdateAgentConnectedStatus(agentID string) error {
 }
 
 // SendQuery, belirli bir agent'a sorgu gönderir ve cevabı bekler
-
-// SendQuery, belirli bir agent'a sorgu gönderir ve cevabı bekler
-
-// SendQuery, belirli bir agent'a sorgu gönderir ve cevabı bekler
 func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, database string) (*pb.QueryResult, error) {
+	logger.Info().
+		Str("agent_id", agentID).
+		Str("query_id", queryID).
+		Str("command", command).
+		Str("database", database).
+		Msg("SendQuery başladı")
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -794,17 +833,32 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	// Agent ID'sini kontrol et ve gerekirse düzelt
 	if !strings.HasPrefix(agentID, "agent_") {
 		agentID = "agent_" + agentID
+		logger.Debug().Str("agent_id", agentID).Msg("Agent ID düzeltildi")
 	}
 
 	agentConn, ok := s.agents[agentID]
 	if !ok {
+		logger.Error().
+			Str("agent_id", agentID).
+			Int("total_agents", len(s.agents)).
+			Msg("Agent bulunamadı")
 		return nil, fmt.Errorf("agent bulunamadı: %s", agentID)
 	}
 
 	// Stream bağlantısının geçerli olduğunu kontrol et
 	if agentConn.Stream == nil {
+		logger.Error().
+			Str("agent_id", agentID).
+			Str("hostname", agentConn.Info.Hostname).
+			Str("ip", agentConn.Info.Ip).
+			Msg("Agent stream bağlantısı nil - bağlantı geçersiz")
 		return nil, fmt.Errorf("agent bağlantısı geçersiz: %s", agentID)
 	}
+
+	logger.Debug().
+		Str("agent_id", agentID).
+		Str("hostname", agentConn.Info.Hostname).
+		Msg("Agent stream bağlantısı geçerli, sorgu gönderiliyor")
 
 	// Sorgu cevabı için bir kanal oluştur
 	resultChan := make(chan *pb.QueryResult, 1)
@@ -816,12 +870,17 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	}
 	s.queryMu.Unlock()
 
+	logger.Debug().
+		Str("query_id", queryID).
+		Msg("Query result channel oluşturuldu ve map'e eklendi")
+
 	// Temizlik işlemi için defer
 	defer func() {
 		s.queryMu.Lock()
 		delete(s.queryResult, queryID)
 		s.queryMu.Unlock()
 		close(resultChan)
+		logger.Debug().Str("query_id", queryID).Msg("Query result channel temizlendi")
 	}()
 
 	// Sorguyu agent'a gönder
@@ -836,15 +895,45 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	})
 
 	if err != nil {
-		logger.Error().Err(err).Str("query_id", queryID).Msg("Sorgu gönderimi başarısız")
+		// gRPC status kodunu al
+		if status, ok := grpcstatus.FromError(err); ok {
+			logger.Error().
+				Err(err).
+				Str("query_id", queryID).
+				Str("agent_id", agentID).
+				Str("grpc_code", status.Code().String()).
+				Str("grpc_message", status.Message()).
+				Msg("Sorgu gönderimi başarısız - gRPC hatası")
+		} else {
+			logger.Error().
+				Err(err).
+				Str("query_id", queryID).
+				Str("agent_id", agentID).
+				Msg("Sorgu gönderimi başarısız - non-gRPC hatası")
+		}
+
+		// Stream'i nil yap ki bir sonraki istekte "stream geçersiz" hatası verilsin
+		agentConn.Stream = nil
+		logger.Warn().
+			Str("agent_id", agentID).
+			Msg("Stream bağlantısı kesildiği için nil yapıldı")
+
 		return nil, err
 	}
 
-	logger.Debug().Str("query_id", queryID).Msg("Sorgu gönderildi, yanıt bekleniyor")
+	logger.Info().
+		Str("query_id", queryID).
+		Str("agent_id", agentID).
+		Msg("Sorgu başarıyla gönderildi, yanıt bekleniyor")
 
 	// Cevabı bekle (timeout ile)
 	select {
 	case result := <-resultChan:
+		logger.Info().
+			Str("query_id", queryID).
+			Str("agent_id", agentID).
+			Msg("Sorgu yanıtı result channel'dan alındı")
+
 		// Protobuf sonucunu JSON formatına dönüştür
 		if result.Result != nil {
 			// Protobuf struct'ı parse et
@@ -870,13 +959,23 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 				Value:   jsonBytes,
 			}
 		}
-		logger.Debug().Str("query_id", queryID).Msg("Sorgu yanıtı alındı")
+		logger.Info().
+			Str("query_id", queryID).
+			Str("agent_id", agentID).
+			Msg("Sorgu yanıtı başarıyla işlendi ve döndürülüyor")
 		return result, nil
 	case <-ctx.Done():
-		logger.Error().Err(ctx.Err()).Str("query_id", queryID).Msg("Context iptal edildi")
+		logger.Error().
+			Err(ctx.Err()).
+			Str("query_id", queryID).
+			Str("agent_id", agentID).
+			Msg("Context iptal edildi veya timeout")
 		return nil, ctx.Err()
 	case <-time.After(60 * time.Second): // 60 saniye timeout - uzun süren sorgular için
-		logger.Error().Str("query_id", queryID).Msg("Sorgu zaman aşımına uğradı")
+		logger.Error().
+			Str("query_id", queryID).
+			Str("agent_id", agentID).
+			Msg("Sorgu zaman aşımına uğradı - 60 saniye içinde yanıt alınamadı")
 		return nil, fmt.Errorf("sorgu zaman aşımına uğradı")
 	}
 }
@@ -2572,7 +2671,7 @@ func (s *Server) saveMongoInfoToDatabase(ctx context.Context, mongoInfo *pb.Mong
 func (s *Server) GetStatusMongo(ctx context.Context, _ *structpb.Struct) (*structpb.Value, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT json_agg(sub.jsondata) FROM (SELECT jsondata FROM mongo_data ORDER BY id) AS sub")
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
 	}
 	defer rows.Close()
 
@@ -2580,19 +2679,19 @@ func (s *Server) GetStatusMongo(ctx context.Context, _ *structpb.Struct) (*struc
 	if rows.Next() {
 		err := rows.Scan(&jsonData)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
+			return nil, grpcstatus.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
 		}
 	}
 
 	// JSON verisini structpb.Value'ya dönüştür
 	var jsonValue interface{}
 	if err := json.Unmarshal(jsonData, &jsonValue); err != nil {
-		return nil, status.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
 	}
 
 	value, err := structpb.NewValue(jsonValue)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
 	}
 
 	return value, nil
@@ -2623,12 +2722,12 @@ func (s *Server) ListMongoLogs(ctx context.Context, req *pb.MongoLogListRequest)
 
 				// Daha açıklayıcı hata mesajları için gRPC status kodlarına dönüştür
 				if strings.Contains(err.Error(), "agent bulunamadı") {
-					return nil, status.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
+					return nil, grpcstatus.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
 				} else if err == context.DeadlineExceeded {
-					return nil, status.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
+					return nil, grpcstatus.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
 				}
 
-				return nil, status.Errorf(codes.Internal, "MongoDB log dosyaları listelenirken bir hata oluştu: %v", err)
+				return nil, grpcstatus.Errorf(codes.Internal, "MongoDB log dosyaları listelenirken bir hata oluştu: %v", err)
 			}
 
 			logger.Info().
@@ -2647,7 +2746,7 @@ func (s *Server) ListMongoLogs(ctx context.Context, req *pb.MongoLogListRequest)
 	}
 
 	if agentID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
 	}
 
 	// Agent'a istek gönder ve sonucu al
@@ -2660,12 +2759,12 @@ func (s *Server) ListMongoLogs(ctx context.Context, req *pb.MongoLogListRequest)
 
 		// Daha açıklayıcı hata mesajları için gRPC status kodlarına dönüştür
 		if strings.Contains(err.Error(), "agent bulunamadı") {
-			return nil, status.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
+			return nil, grpcstatus.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
 		} else if err == context.DeadlineExceeded {
-			return nil, status.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
+			return nil, grpcstatus.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
 		}
 
-		return nil, status.Errorf(codes.Internal, "MongoDB log dosyaları listelenirken bir hata oluştu: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "MongoDB log dosyaları listelenirken bir hata oluştu: %v", err)
 	}
 
 	logger.Info().
@@ -2712,12 +2811,12 @@ func (s *Server) AnalyzeMongoLog(ctx context.Context, req *pb.MongoLogAnalyzeReq
 	logger.Debug().Str("agent_id", agentID).Msg("Kullanılan agent_id")
 
 	if agentID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
 	}
 
 	// İstek parametrelerini kontrol et
 	if req.LogFilePath == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "Log dosya yolu belirtilmedi")
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "Log dosya yolu belirtilmedi")
 	}
 
 	// Threshold için varsayılan değeri ayarla
@@ -2740,12 +2839,12 @@ func (s *Server) AnalyzeMongoLog(ctx context.Context, req *pb.MongoLogAnalyzeReq
 
 		// Daha açıklayıcı hata mesajları için gRPC status kodlarına dönüştür
 		if strings.Contains(err.Error(), "agent bulunamadı") {
-			return nil, status.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
+			return nil, grpcstatus.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
 		} else if err == context.DeadlineExceeded {
-			return nil, status.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
+			return nil, grpcstatus.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
 		}
 
-		return nil, status.Errorf(codes.Internal, "MongoDB log analizi için bir hata oluştu: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "MongoDB log analizi için bir hata oluştu: %v", err)
 	}
 
 	return response, nil
@@ -3358,12 +3457,12 @@ func (s *Server) ListPostgresLogs(ctx context.Context, req *pb.PostgresLogListRe
 
 				// Daha açıklayıcı hata mesajları için gRPC status kodlarına dönüştür
 				if strings.Contains(err.Error(), "agent bulunamadı") {
-					return nil, status.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
+					return nil, grpcstatus.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
 				} else if err == context.DeadlineExceeded {
-					return nil, status.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
+					return nil, grpcstatus.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
 				}
 
-				return nil, status.Errorf(codes.Internal, "PostgreSQL log dosyaları listelenirken bir hata oluştu: %v", err)
+				return nil, grpcstatus.Errorf(codes.Internal, "PostgreSQL log dosyaları listelenirken bir hata oluştu: %v", err)
 			}
 
 			logger.Info().
@@ -3382,7 +3481,7 @@ func (s *Server) ListPostgresLogs(ctx context.Context, req *pb.PostgresLogListRe
 	}
 
 	if agentID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "Agent ID belirtilmedi")
 	}
 
 	// Agent'a istek gönder ve sonucu al
@@ -3395,12 +3494,12 @@ func (s *Server) ListPostgresLogs(ctx context.Context, req *pb.PostgresLogListRe
 
 		// Daha açıklayıcı hata mesajları için gRPC status kodlarına dönüştür
 		if strings.Contains(err.Error(), "agent bulunamadı") {
-			return nil, status.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
+			return nil, grpcstatus.Errorf(codes.NotFound, "Agent bulunamadı veya bağlantı kapalı: %s", agentID)
 		} else if err == context.DeadlineExceeded {
-			return nil, status.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
+			return nil, grpcstatus.Errorf(codes.DeadlineExceeded, "İstek zaman aşımına uğradı")
 		}
 
-		return nil, status.Errorf(codes.Internal, "PostgreSQL log dosyaları listelenirken bir hata oluştu: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "PostgreSQL log dosyaları listelenirken bir hata oluştu: %v", err)
 	}
 
 	logger.Info().
@@ -3801,13 +3900,13 @@ func (s *Server) GetAlarmsStatus(ctx context.Context, _ *structpb.Struct) (*stru
 	// Alarmları getir - Son 100 alarmı al
 	alarms, _, err := s.GetAlarms(ctx, false, 100, 0, "", "", nil, nil)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Alarm verileri alınamadı: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Alarm verileri alınamadı: %v", err)
 	}
 
 	// JSON verisini structpb.Value'ya dönüştür
 	value, err := structpb.NewValue(alarms)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
 	}
 
 	return value, nil
@@ -6021,7 +6120,7 @@ func (s *Server) saveMSSQLInfoToDatabase(ctx context.Context, mssqlInfo *pb.MSSQ
 func (s *Server) GetStatusMSSQL(ctx context.Context, _ *structpb.Struct) (*structpb.Value, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT json_agg(sub.jsondata) FROM (SELECT jsondata FROM mssql_data ORDER BY id) AS sub")
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veritabanı sorgusu başarısız: %v", err)
 	}
 	defer rows.Close()
 
@@ -6029,19 +6128,19 @@ func (s *Server) GetStatusMSSQL(ctx context.Context, _ *structpb.Struct) (*struc
 	if rows.Next() {
 		err := rows.Scan(&jsonData)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
+			return nil, grpcstatus.Errorf(codes.Internal, "Veri okuma hatası: %v", err)
 		}
 	}
 
 	// JSON verisini structpb.Value'ya dönüştür
 	var jsonValue interface{}
 	if err := json.Unmarshal(jsonData, &jsonValue); err != nil {
-		return nil, status.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "JSON ayrıştırma hatası: %v", err)
 	}
 
 	value, err := structpb.NewValue(jsonValue)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
+		return nil, grpcstatus.Errorf(codes.Internal, "Veri dönüştürme hatası: %v", err)
 	}
 
 	return value, nil

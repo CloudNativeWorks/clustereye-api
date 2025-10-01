@@ -404,7 +404,15 @@ func sendQueryToAgent(server *server.Server) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		agentID := c.Param("agent_id")
 
+		logger.Info().
+			Str("agent_id", agentID).
+			Str("remote_addr", c.ClientIP()).
+			Str("method", c.Request.Method).
+			Str("path", c.Request.URL.Path).
+			Msg("Query endpoint'ine istek geldi")
+
 		if agentID == "" {
+			logger.Warn().Msg("agent_id parametresi eksik")
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  "agent_id parametresi gerekli",
@@ -419,12 +427,22 @@ func sendQueryToAgent(server *server.Server) gin.HandlerFunc {
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logger.Warn().
+				Err(err).
+				Str("agent_id", agentID).
+				Msg("Geçersiz JSON verisi")
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status": "error",
 				"error":  "Geçersiz JSON verisi: " + err.Error(),
 			})
 			return
 		}
+
+		logger.Info().
+			Str("agent_id", agentID).
+			Str("query_id", req.QueryID).
+			Str("database", req.Database).
+			Msg("Query request parametreleri alındı, SendQuery çağrılıyor")
 
 		// Context oluştur (request'in iptal edilmesi durumunda kullanılacak)
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
@@ -444,12 +462,25 @@ func sendQueryToAgent(server *server.Server) gin.HandlerFunc {
 				message = "Agent bulunamadı veya bağlantı kapalı"
 			}
 
+			logger.Error().
+				Err(err).
+				Str("agent_id", agentID).
+				Str("query_id", req.QueryID).
+				Int("http_status", status).
+				Str("error_message", message).
+				Msg("Query endpoint'ten hata döndürüldü")
+
 			c.JSON(status, gin.H{
 				"status": "error",
 				"error":  message,
 			})
 			return
 		}
+
+		logger.Info().
+			Str("agent_id", agentID).
+			Str("query_id", req.QueryID).
+			Msg("Query başarıyla tamamlandı, HTTP 200 döndürülüyor")
 
 		// Başarılı yanıt
 		c.JSON(http.StatusOK, gin.H{
