@@ -136,7 +136,7 @@ func (s *Server) Connect(stream pb.AgentService_ConnectServer) error {
 			return err
 		}
 
-		logger.Debug().
+		logger.Info().
 			Str("agent_id", currentAgentID).
 			Msg("Stream'den mesaj alındı")
 
@@ -677,6 +677,10 @@ func (s *Server) GetConnectedAgents() []map[string]interface{} {
 					},
 				}
 
+				logger.Info().
+					Str("agent_id", id).
+					Msg("Ping mesajı gönderiliyor")
+
 				// Ping'i sadece gRPC stream üzerinden gönder
 				err := conn.Stream.Send(pingMsg)
 				if err == nil {
@@ -692,11 +696,29 @@ func (s *Server) GetConnectedAgents() []map[string]interface{} {
 					// Veritabanındaki agent durumunu ve last_seen'i güncelle
 					s.UpdateAgentConnectedStatus(id)
 
-					logger.Debug().Str("agent_id", id).Msg("Ping gönderimi başarılı, bağlantı durumu güncellendi")
+					logger.Info().Str("agent_id", id).Msg("Ping gönderimi başarılı, bağlantı durumu güncellendi")
 				} else {
-					logger.Warn().Err(err).Str("agent_id", id).Msg("Agent ping hatası")
+					// gRPC hata detayı
+					if grpcStatus, ok := grpcstatus.FromError(err); ok {
+						logger.Error().
+							Err(err).
+							Str("agent_id", id).
+							Str("grpc_code", grpcStatus.Code().String()).
+							Str("grpc_message", grpcStatus.Message()).
+							Msg("Agent ping hatası - gRPC error")
+					} else {
+						logger.Error().
+							Err(err).
+							Str("agent_id", id).
+							Msg("Agent ping hatası - non-gRPC error")
+					}
+
 					// Stream'i nil yap ama agent'ı silme
 					conn.Stream = nil
+					logger.Warn().
+						Str("agent_id", id).
+						Msg("Ping hatası nedeniyle stream nil yapıldı")
+
 					// Son ping zamanını da sil
 					s.lastPingMu.Lock()
 					delete(s.lastPingTime, id)
@@ -704,6 +726,10 @@ func (s *Server) GetConnectedAgents() []map[string]interface{} {
 					// Status zaten "disconnected" olarak ayarlandı
 				}
 			}
+		} else {
+			logger.Warn().
+				Str("agent_id", id).
+				Msg("Agent stream nil durumda")
 		}
 
 		// last_seen için doğru zaman bilgisini kullan
@@ -838,7 +864,7 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	}
 
 	if originalAgentID != agentID {
-		logger.Debug().
+		logger.Info().
 			Str("original_agent_id", originalAgentID).
 			Str("normalized_agent_id", agentID).
 			Msg("Agent ID normalize edildi")
@@ -871,7 +897,7 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 		return nil, fmt.Errorf("agent bağlantısı geçersiz: %s", agentID)
 	}
 
-	logger.Debug().
+	logger.Info().
 		Str("agent_id", agentID).
 		Str("hostname", agentConn.Info.Hostname).
 		Msg("Agent stream bağlantısı geçerli, sorgu gönderiliyor")
@@ -886,7 +912,7 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	}
 	s.queryMu.Unlock()
 
-	logger.Debug().
+	logger.Info().
 		Str("query_id", queryID).
 		Msg("Query result channel oluşturuldu ve map'e eklendi")
 
@@ -896,10 +922,28 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 		delete(s.queryResult, queryID)
 		s.queryMu.Unlock()
 		close(resultChan)
-		logger.Debug().Str("query_id", queryID).Msg("Query result channel temizlendi")
+		logger.Info().Str("query_id", queryID).Msg("Query result channel temizlendi")
 	}()
 
+	// Context kontrolü - Send öncesi
+	select {
+	case <-ctx.Done():
+		logger.Error().
+			Err(ctx.Err()).
+			Str("query_id", queryID).
+			Str("agent_id", agentID).
+			Msg("Context iptal edildi - Stream.Send() çağrılmadan önce")
+		return nil, ctx.Err()
+	default:
+		// Context hala aktif, devam et
+	}
+
 	// Sorguyu agent'a gönder
+	logger.Info().
+		Str("query_id", queryID).
+		Str("agent_id", agentID).
+		Msg("Stream.Send() çağrılıyor...")
+
 	err := agentConn.Stream.Send(&pb.ServerMessage{
 		Payload: &pb.ServerMessage_Query{
 			Query: &pb.Query{
@@ -1008,7 +1052,7 @@ func (s *Server) SendSystemMetrics(ctx context.Context, req *pb.SystemMetricsReq
 	}
 
 	if originalAgentID != agentID {
-		logger.Debug().
+		logger.Info().
 			Str("original_agent_id", originalAgentID).
 			Str("normalized_agent_id", agentID).
 			Msg("Agent ID normalize edildi")
