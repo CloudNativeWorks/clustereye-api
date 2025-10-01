@@ -830,17 +830,33 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Agent ID'sini kontrol et ve gerekirse düzelt
+	// Agent ID'sini normalize et (küçük harfe çevir ve agent_ prefix ekle)
+	originalAgentID := agentID
+	agentID = strings.ToLower(agentID)
 	if !strings.HasPrefix(agentID, "agent_") {
 		agentID = "agent_" + agentID
-		logger.Debug().Str("agent_id", agentID).Msg("Agent ID düzeltildi")
+	}
+
+	if originalAgentID != agentID {
+		logger.Debug().
+			Str("original_agent_id", originalAgentID).
+			Str("normalized_agent_id", agentID).
+			Msg("Agent ID normalize edildi")
 	}
 
 	agentConn, ok := s.agents[agentID]
 	if !ok {
+		// Mevcut agent'ları log'la
+		availableAgents := make([]string, 0, len(s.agents))
+		for id := range s.agents {
+			availableAgents = append(availableAgents, id)
+		}
+
 		logger.Error().
 			Str("agent_id", agentID).
+			Str("original_agent_id", originalAgentID).
 			Int("total_agents", len(s.agents)).
+			Strs("available_agents", availableAgents).
 			Msg("Agent bulunamadı")
 		return nil, fmt.Errorf("agent bulunamadı: %s", agentID)
 	}
@@ -984,11 +1000,18 @@ func (s *Server) SendQuery(ctx context.Context, agentID, queryID, command, datab
 func (s *Server) SendSystemMetrics(ctx context.Context, req *pb.SystemMetricsRequest) (*pb.SystemMetricsResponse, error) {
 	logger.Info().Str("agent_id", req.AgentId).Msg("SendSystemMetrics başladı - basitleştirilmiş yaklaşım")
 
-	// Agent ID'yi standart formata getir
-	agentID := req.AgentId
+	// Agent ID'sini normalize et (küçük harfe çevir ve agent_ prefix ekle)
+	originalAgentID := req.AgentId
+	agentID := strings.ToLower(req.AgentId)
 	if !strings.HasPrefix(agentID, "agent_") {
 		agentID = "agent_" + agentID
-		logger.Debug().Str("agent_id", agentID).Msg("Agent ID düzeltildi")
+	}
+
+	if originalAgentID != agentID {
+		logger.Debug().
+			Str("original_agent_id", originalAgentID).
+			Str("normalized_agent_id", agentID).
+			Msg("Agent ID normalize edildi")
 	}
 
 	// Agent bağlantısını bul
@@ -997,7 +1020,20 @@ func (s *Server) SendSystemMetrics(ctx context.Context, req *pb.SystemMetricsReq
 	s.mu.RUnlock()
 
 	if !ok {
-		logger.Error().Str("agent_id", agentID).Msg("Agent bulunamadı")
+		// Mevcut agent'ları log'la
+		s.mu.RLock()
+		availableAgents := make([]string, 0, len(s.agents))
+		for id := range s.agents {
+			availableAgents = append(availableAgents, id)
+		}
+		s.mu.RUnlock()
+
+		logger.Error().
+			Str("agent_id", agentID).
+			Str("original_agent_id", originalAgentID).
+			Int("total_agents", len(s.agents)).
+			Strs("available_agents", availableAgents).
+			Msg("Agent bulunamadı")
 		return nil, fmt.Errorf("agent bulunamadı: %s", agentID)
 	}
 
