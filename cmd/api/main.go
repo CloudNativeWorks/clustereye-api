@@ -116,8 +116,8 @@ func main() {
 
 		// Keepalive enforcement policy - ENHANCE_YOUR_CALM hatasını önlemek için
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             60 * time.Second, // Minimum interval between pings
-			PermitWithoutStream: false,            // Require active streams for pings
+			MinTime:             10 * time.Second, // Minimum interval between pings (lowered for better keepalive)
+			PermitWithoutStream: true,             // Allow pings even with streams (important for long-lived connections)
 		}),
 
 		// Server keepalive parameters
@@ -125,7 +125,7 @@ func main() {
 			MaxConnectionIdle:     0,                // Disable idle connection timeout (infinite)
 			MaxConnectionAge:      0,                // Disable max connection age (infinite)
 			MaxConnectionAgeGrace: 0,                // Disable grace period (infinite)
-			Time:                  60 * time.Second, // Send pings every 60 seconds
+			Time:                  20 * time.Second, // Send pings every 20 seconds (more frequent for TLS/Envoy)
 			Timeout:               10 * time.Second, // Wait 10 seconds for ping response
 		}),
 	}
