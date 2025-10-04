@@ -254,6 +254,7 @@ func RegisterHandlers(router *gin.Engine, server *server.Server) {
 				performance.GET("/seq-scan-ratio", getPostgreSQLPerformanceSeqScanRatioMetrics(server))
 				performance.GET("/cache-hit-ratio", getPostgreSQLPerformanceCacheHitRatioMetrics(server))
 				performance.GET("/queries", getPostgresQueryMetrics(server))
+				performance.GET("/baseline", getPostgresQueryBaseline(server)) // Aggregated baseline endpoint
 				performance.GET("/all", getPostgreSQLPerformanceAllMetrics(server))
 			}
 		}
@@ -3676,6 +3677,124 @@ func getPostgresQueryMetrics(server *server.Server) gin.HandlerFunc {
 			"status": "success",
 			"data":   results,
 			"note":   "PostgreSQL query performance metrics for anomaly detection",
+		})
+	}
+}
+
+// getPostgresQueryBaseline, PostgreSQL query'leri için aggregated baseline metrikleri döndürür
+// Bu endpoint 7 günlük veriyi InfluxDB'de aggregate ederek küçük bir response döner
+func getPostgresQueryBaseline(server *server.Server) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		agentID := c.Query("agent_id")
+		timeRange := c.DefaultQuery("range", "7d")
+
+		if agentID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status": "error",
+				"error":  "agent_id parametresi gerekli",
+			})
+			return
+		}
+
+		// InfluxDB query - Aggregated baseline calculation
+		// Her query_hash için min, max, mean, stddev hesapla
+		query := fmt.Sprintf(`
+import "experimental"
+import "math"
+
+data = from(bucket: "clustereye")
+  |> range(start: -%s)
+  |> filter(fn: (r) => r._measurement == "postgresql_query")
+  |> filter(fn: (r) => r._field == "execution_count" or
+                       r._field == "avg_duration_ms" or
+                       r._field == "total_duration_ms" or
+                       r._field == "total_io_read_bytes" or
+                       r._field == "total_io_write_bytes" or
+                       r._field == "total_rows_returned" or
+                       r._field == "avg_rows_returned")
+  |> filter(fn: (r) => r.agent_id =~ /^%s$/)
+
+// Calculate statistics for each query_hash and field combination
+stats = data
+  |> group(columns: ["query_hash", "_field"])
+  |> experimental.unpivot()
+  |> group(columns: ["query_hash", "_field"])
+  |> reduce(
+      identity: {min: 0.0, max: 0.0, sum: 0.0, count: 0.0, m2: 0.0},
+      fn: (r, accumulator) => ({
+        min: if accumulator.count == 0.0 then r._value else if r._value < accumulator.min then r._value else accumulator.min,
+        max: if r._value > accumulator.max then r._value else accumulator.max,
+        sum: accumulator.sum + r._value,
+        count: accumulator.count + 1.0,
+        m2: accumulator.m2 + (r._value - (accumulator.sum / (accumulator.count + 1.0))) * (r._value - ((accumulator.sum + r._value) / (accumulator.count + 1.0)))
+      })
+    )
+  |> map(fn: (r) => ({
+      query_hash: r.query_hash,
+      _field: r._field,
+      min: r.min,
+      max: r.max,
+      avg: r.sum / r.count,
+      stddev: if r.count > 1.0 then math.sqrt(x: r.m2 / (r.count - 1.0)) else 0.0,
+      sample_count: int(v: r.count)
+    }))
+
+stats`, timeRange, regexp.QuoteMeta(agentID))
+
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
+		defer cancel()
+
+		influxWriter := server.GetInfluxWriter()
+		if influxWriter == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "error",
+				"error":  "InfluxDB servisi kullanılamıyor",
+			})
+			return
+		}
+
+		results, err := influxWriter.QueryMetrics(ctx, query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status": "error",
+				"error":  "Baseline hesaplanırken hata: " + err.Error(),
+			})
+			return
+		}
+
+		// Transform results into baseline format
+		baselines := make(map[string]map[string]map[string]interface{})
+
+		for _, record := range results {
+			queryHash, ok := record["query_hash"].(string)
+			if !ok {
+				continue
+			}
+
+			field, ok := record["_field"].(string)
+			if !ok {
+				continue
+			}
+
+			if baselines[queryHash] == nil {
+				baselines[queryHash] = make(map[string]map[string]interface{})
+			}
+
+			baselines[queryHash][field] = map[string]interface{}{
+				"min":          record["min"],
+				"max":          record["max"],
+				"avg":          record["avg"],
+				"stddev":       record["stddev"],
+				"sample_count": record["sample_count"],
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":        "success",
+			"baselines":     baselines,
+			"total_queries": len(baselines),
+			"data_range":    timeRange,
+			"calculated_at": time.Now().UTC().Format(time.RFC3339),
 		})
 	}
 }
